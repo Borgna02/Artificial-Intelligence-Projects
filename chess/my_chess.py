@@ -16,7 +16,7 @@ DEPTH = 2
 THINKING_TIME = (0, 0)
 
 class Chess(object):
-    def __init__(self, screen, pieces_src, square_coords, square_length, num_players: int, random_configuration_steps: int, evaluated_algorithm:Algorithms=Algorithms.ALPHA_BETA, no_display=False, statistic_mode=False):
+    def __init__(self, screen, pieces_src, square_coords, square_length, num_players: int, random_configuration_steps: int, evaluated_algorithm:Algorithms, no_display=False, statistic_mode=False):
 
         self.no_display = no_display
         self.statistic_mode = statistic_mode
@@ -40,10 +40,10 @@ class Chess(object):
         self.num_players = num_players
         match num_players:
             case 0:
-                self.white_player = Player(self, "white", Algorithms.ALPHA_BETA, "standard", False)
-                self.black_player = Player(self, "black", evaluated_algorithm, "standard", statistic_mode)
+                self.white_player = Player(self, "white", Algorithms.BRANCHING_LIMIT, "standard", False)
+                self.black_player = Player(self, "black", evaluated_algorithm, "better", statistic_mode)
             case 1:
-                self.black_player = Player(self, "black", Algorithms.ALPHA_BETA, "standard", False)
+                self.black_player = Player(self, "black", Algorithms.BRANCHING_LIMIT, "standard", False)
                 
 
         # list containing possible moves for the selected piece
@@ -159,23 +159,23 @@ class Chess(object):
         # let player with black piece play
         destination_move = None
         number_of_black_pieces = len(self.get_available_pieces()["black"])
-        number_of_possible_moves = len(self.get_all_possible_moves("black"))
+        number_of_possible_moves = sum(len(self.get_all_possible_moves("black")[i]) for i in self.get_all_possible_moves("black").keys())
         
         
         if (self.turn["black"]):
             
 
             if self.num_players < 2:
+
                 start = time.time()
-                self.black_player.engine.reset_operation_count()
                 _, board = self.black_player.choose_move(
-                    node=self.piece_location,
-                    depth=DEPTH,
-                    maximizing_player=True
+                    state=self.piece_location,
+                    l=DEPTH
                 )
                 end = time.time()
                 elapsed_time = end - start
                 
+
                 if self.statistic_mode:
                     self.black_player.register_statistics(number_of_black_pieces, number_of_possible_moves, elapsed_time)
 
@@ -202,9 +202,8 @@ class Chess(object):
             if self.num_players == 0:
 
                 _, board = self.white_player.choose_move(
-                    node=self.piece_location,
-                    depth=DEPTH,
-                    maximizing_player=True
+                    state=self.piece_location,
+                    l=DEPTH
                 )
 
                 if not board:

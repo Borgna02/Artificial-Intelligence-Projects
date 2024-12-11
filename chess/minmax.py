@@ -1,87 +1,141 @@
 
 
-from typing import Literal
+from typing import Callable
 from enum import Enum
 
 class Algorithms(Enum):
-    ALPHA_BETA = "alpha_beta"
+    MIN_MAX = "min_max"
+    FAIL_HARD_ALPHA_BETA = "fail_hard_alpha_beta"
+    FAIL_SOFT_ALPHA_BETA = "fail_soft_alpha_beta"
     BRANCHING_LIMIT = "branching_limit"
     
     
-    
 class MinMax:
-
-
-    def __init__(self, get_children, evaluate, engine: Algorithms = Algorithms.ALPHA_BETA):
+    def __init__(self, get_children, evaluate, engine: Algorithms):
         self.maximizing_player = None
         self.get_children = get_children
-        self.evaluate = evaluate
-        self.operation_count = 0
+        self.H_0 = evaluate
 
         match engine:
-            case Algorithms.ALPHA_BETA:
-                self.engine = self.abminmax
+            case Algorithms.MIN_MAX:
+                self.engine = self.minmax
+            case Algorithms.FAIL_HARD_ALPHA_BETA:
+                self.engine = self.fhabminmax
+            case Algorithms.FAIL_SOFT_ALPHA_BETA:
+                self.engine = self.fsabminmax
             case Algorithms.BRANCHING_LIMIT:
                 self.engine = self.blminmax
             case _:
                 raise ValueError(
-                    "Invalid engine type. Choose between 'alpha_beta' and 'branching_limit'.")
+                    F"Invalid engine type. Choose between {', '.join([engine.value for engine in Algorithms])}")
+                
+    def minmax(self, state, l, maximizing_player=True):
 
-    def abminmax(self, node, depth, maximizing_player, alpha=float('-inf'), beta=float('inf')):
-        """
-        Implementazione generica dell'algoritmo MinMax con potatura Alpha-Beta.
-
-        Args:
-            node: il nodo corrente dello stato di gioco.
-            depth: profondità massima per cui eseguire l'algoritmo.
-            alpha: il valore Alpha (la migliore opzione già trovata per il giocatore massimizzante).
-            beta: il valore Beta (la migliore opzione già trovata per il giocatore minimizzante).
-            maximizing_player: booleano, True se il giocatore corrente è il massimizzante, False altrimenti.
-            get_children: funzione che restituisce i nodi figli del nodo corrente.
-            evaluate: funzione di valutazione che restituisce un punteggio per un nodo terminale o uno stato di gioco.
-
-        Returns:
-            Il miglior valore possibile per il giocatore corrente.
-        """
+        # Aggiorna il giocatore corrente
         self.maximizing_player = maximizing_player
-        get_children = self.get_children
-        evaluate = self.evaluate
-        
-        # Incrementa il contatore delle operazioni
-        self.operation_count += 1
-        
-        # Condizione terminale: profondità zero o stato terminale
-        if depth == 0 or not get_children(node):
-            return evaluate(node), node
 
-        # Inizializza i valori di confronto e il nodo migliore
+        # Memorizza i figli per evitare calcoli ripetuti
+        children = self.get_children(state)
+
+        # Condizione terminale: profondità zero o stato terminale
+        if l == 0 or not children:
+            return self.H_0(state), state
+
+        # Inizializza il valore migliore e il nodo migliore
+        best_value = float('-inf') if maximizing_player else float('inf')
+        best_move = None
+
+        # Ciclo sui figli
+        for next_state in children:
+            current_value, _ = self.minmax(next_state, l - 1, not maximizing_player)
+
+            if maximizing_player:
+                if current_value > best_value:
+                    best_value = current_value
+                    best_move = next_state
+            else:
+                if current_value < best_value:
+                    best_value = current_value
+                    best_move = next_state
+
+        return best_value, best_move
+
+
+    def fhabminmax(self, state, l, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
+
+        # Aggiorna il giocatore corrente
+        self.maximizing_player = maximizing_player
+        
+        # Memorizza i figli per evitare calcoli ripetuti
+        children = self.get_children(state)
+
+        # Condizione terminale: profondità zero o stato terminale
+        if l == 0 or not children:
+            return self.H_0(state), state
+        
+        # Inizializza il valore migliore e il nodo migliore
         best_value = float('-inf') if maximizing_player else float('inf')
         best_child = None
 
         # Ciclo sui figli
-        for child in get_children(node):
-            eval, _ = self.abminmax(
-                child, depth - 1, not maximizing_player, alpha, beta)
+        for child in children:
+            child_value, _ = self.fhabminmax(child, l - 1, alpha, beta, not maximizing_player)
 
-            # Aggiorna il miglior valore e il nodo migliore
             if maximizing_player:
-                if eval > best_value:
-                    best_value = eval
+                if child_value > best_value:
+                    best_value = child_value
                     best_child = child
-                alpha = max(alpha, eval)
+                alpha = max(alpha, best_value)
             else:
-                if eval < best_value:
-                    best_value = eval
+                if child_value < best_value:
+                    best_value = child_value
                     best_child = child
-                beta = min(beta, eval)
-
-            # Potatura
-            if beta <= alpha:
-                break
+                beta = min(beta, best_value)
+            if beta < alpha:
+                break  # Potatura Beta
 
         return best_value, best_child
 
-    def blminmax(self, node, depth, maximizing_player, alpha=float('-inf'), beta=float('inf'), branching_factor=5):
+    def fsabminmax(self, state, l, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
+  
+        # Aggiorna il giocatore corrente
+        self.maximizing_player = maximizing_player
+        get_children = self.get_children
+        evaluate = self.H_0
+        
+        # Memorizza i figli per evitare calcoli ripetuti
+        # children = get_children(state)
+
+        # Condizione terminale: profondità zero o stato terminale
+        if l == 0 or not get_children(state):
+            return evaluate(state), state
+        
+        # Inizializza il valore migliore e il nodo migliore
+        best_value = float('-inf') if maximizing_player else float('inf')
+        best_child = None
+
+        # Ciclo sui figli
+        for child in get_children(state):
+            child_value, _ = self.fsabminmax(child, l - 1, alpha, beta, not maximizing_player)
+
+            if maximizing_player:
+                if child_value > best_value:
+                    best_value = child_value
+                    best_child = child
+                alpha = max(alpha, best_value)
+            else:
+                if child_value < best_value:
+                    best_value = child_value
+                    best_child = child
+                beta = min(beta, best_value)
+            if beta <= alpha:
+                break  # Potatura Beta
+
+        return best_value, best_child
+
+    
+
+    def blminmax(self, state, l, maximizing_player=True, alpha=float('-inf'), beta=float('inf'), branching_factor=5):
         """
         Implementazione di MinMax con potatura Alpha-Beta e limite sul branching factor.
 
@@ -98,12 +152,13 @@ class MinMax:
         Returns:
             tuple: (miglior valore, miglior stato figlio)
         """
+        node = state
+        depth = l
         self.maximizing_player = maximizing_player
         get_children = self.get_children
-        evaluate = self.evaluate
+        evaluate = self.H_0
         
-        # Incrementa il contatore delle operazioni
-        self.operation_count += 1
+
         
         if depth == 0 or not get_children(node):
             return evaluate(node), node
@@ -141,6 +196,3 @@ class MinMax:
 
         return best_value, best_child
 
-    def reset_operation_count(self):
-        """Resetta il contatore delle operazioni."""
-        self.operation_count = 0

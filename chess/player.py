@@ -4,7 +4,7 @@ from minmax import MinMax, Algorithms
 MAX_NUM_OF_PIECES = 16
 
 class Player:
-    def __init__(self, chess, color: Literal["white", "black"], algorithm: Algorithms = Algorithms.ALPHA_BETA, heuristic: Literal["standard", "better"] = "standard", statistics_mode=False):
+    def __init__(self, chess, color: Literal["white", "black"], algorithm: Algorithms, heuristic: Literal["standard", "better"] = "standard", statistics_mode=False):
         self.color = color
         self.chess = chess
         
@@ -36,11 +36,9 @@ class Player:
         if statistics_mode:
             self.completed_moves_per_npieces = {i: 0 for i in range (1, MAX_NUM_OF_PIECES + 1)} # Numero di mosse per numero di pezzi
             self.move_times_per_npieces = {i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
-            self.move_iterations_per_npieces = {i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
             
             self.completed_moves_per_nmoves = {} # Numero di mosse per numero di mosse possibili
             self.move_times_per_nmoves = {}
-            self.move_iterations_per_nmoves = {}
             
     def register_statistics(self,
         n_pieces: int,
@@ -52,15 +50,12 @@ class Player:
         self.completed_moves_per_npieces[n_pieces] = self.completed_moves_per_npieces.get(n_pieces, 0) + 1
         self.completed_moves_per_nmoves[n_moves] = self.completed_moves_per_nmoves.get(n_moves, 0) + 1
 
-        self.move_iterations_per_npieces[n_pieces] = self.move_iterations_per_npieces.get(n_pieces, 0) + self.engine.operation_count
-        self.move_iterations_per_nmoves[n_moves] = self.move_iterations_per_nmoves.get(n_moves, 0) + self.engine.operation_count
-
         self.move_times_per_npieces[n_pieces] = self.move_times_per_npieces.get(n_pieces, 0.0) + elapsed_time
         self.move_times_per_nmoves[n_moves] = self.move_times_per_nmoves.get(n_moves, 0.0) + elapsed_time
 
 
     
-    def standard_evaluate_chessboard(self, player_color, board):
+    def standard_evaluate_chessboard(self, player_color: Literal["white", "black"], board):
         """
         Heuristic evaluation function for chess based on material advantage.
 
@@ -99,7 +94,7 @@ class Player:
 
         return score
 
-    def better_evaluate_chessboard(self, board, player_color):
+    def better_evaluate_chessboard(self, player_color:Literal["white", "black"], board):
         """
         Heuristic evaluation function for chess based on material advantage,
         piece mobility, control of the center, and king safety.
@@ -140,7 +135,7 @@ class Player:
                 score += 0.5 if player_color == "white" else -0.5
 
             # Bonus for piece mobility
-            moves = self.possible_moves(
+            moves = self.chess.possible_moves(
                 f"white_{piece_name}", piece_coordinates, board)
             # 0.1 point for each possible move
             mobility_score = len(moves) * 0.1

@@ -251,7 +251,7 @@ class Game:
             self.chess.winner = ""
 
     # The evaluated player is the black player
-    def start_in_statistics_mode(self, nruns = 20, evaluated_algorithm: Algorithms = Algorithms.ALPHA_BETA, random_configuration_steps: int = 10, no_display: bool = True):
+    def start_in_statistics_mode(self, evaluated_algorithm: Algorithms, nruns = 20, random_configuration_steps: int = 10, no_display: bool = True):
 
         wins = 0
         completed_runs = nruns
@@ -324,6 +324,7 @@ class Game:
                     pygame.display.flip()
                     # update events
                     pygame.event.pump()
+                    
             if self.chess.winner == "Black":
                 wins += 1
             elif self.chess.winner == "Draw":
@@ -336,16 +337,14 @@ class Game:
             for i in range(1, MAX_NUM_OF_PIECES + 1):
                 completed_moves_per_npieces[i] += self.chess.black_player.completed_moves_per_npieces[i]
                 move_times_per_npieces[i] += self.chess.black_player.move_times_per_npieces[i]
-                move_iterations_per_npieces[i] += self.chess.black_player.move_iterations_per_npieces[i]
                 
+            
             for i in self.chess.black_player.completed_moves_per_nmoves.keys():
                 if i not in completed_moves_per_nmoves:
                     completed_moves_per_nmoves[i] = 0
                     move_times_per_nmoves[i] = 0
-                    move_iterations_per_nmoves[i] = 0
                 completed_moves_per_nmoves[i] += self.chess.black_player.completed_moves_per_nmoves[i]
                 move_times_per_nmoves[i] += self.chess.black_player.move_times_per_nmoves[i]
-                move_iterations_per_nmoves[i] += self.chess.black_player.move_iterations_per_nmoves[i]
 
             # print(f"\r{self.chess.winner} Wins")
 
@@ -355,19 +354,15 @@ class Game:
 
         average_move_times_per_npieces = {i: move_times_per_npieces[i] / completed_moves_per_npieces[i] if completed_moves_per_npieces[i] != 0 else 0
                               for i in range(1, MAX_NUM_OF_PIECES + 1)}
-        average_move_iterations_per_npieces = {i: move_iterations_per_npieces[i] / completed_moves_per_npieces[i]
-                                   if completed_moves_per_npieces[i] != 0 else 0 for i in range(1,  MAX_NUM_OF_PIECES + 1)}
         win_rate = wins/completed_runs if completed_runs != 0 else 0
         
         
         average_move_times_per_nmoves = {i: move_times_per_nmoves[i] / completed_moves_per_nmoves[i] if completed_moves_per_nmoves[i] != 0 else 0 for i in sorted(move_times_per_nmoves.keys())}
-        average_move_iterations_per_nmoves = {i: move_iterations_per_nmoves[i] / completed_moves_per_nmoves[i] if completed_moves_per_nmoves[i] != 0 else 0 for i in sorted(move_iterations_per_nmoves.keys())}
         
         
         
 
         print(f"Average moves times per piece: {average_move_times_per_npieces}")
-        print(f"Average iterations per piece: {average_move_iterations_per_npieces}")
         print(f"Win rate: {win_rate}, Wins: {wins}, Draws: {draws}, Runs: {nruns}, Failed: {failed_runs}")
 
         # Plot average move times
@@ -379,14 +374,6 @@ class Game:
         plt.title('Average Move Time per Number of Pieces')
         plt.show()
 
-        # Plot average move iterations
-        plt.figure(figsize=(10, 5))
-        plt.plot(average_move_iterations_per_npieces.keys(),
-                 average_move_iterations_per_npieces.values(), color='green')
-        plt.xlabel('Number of Pieces')
-        plt.ylabel('Average Move Iterations')
-        plt.title('Average Move Iterations per Number of Pieces')
-        plt.show()
 
         # Plot average move times
         plt.figure(figsize=(10, 5))
@@ -397,12 +384,5 @@ class Game:
         plt.title('Average Move Time per Number of Possible Moves')
         plt.show()
         
-        # Plot average move iterations
-        plt.figure(figsize=(10, 5))
-        plt.plot(average_move_iterations_per_nmoves.keys(),
-                 average_move_iterations_per_nmoves.values(), color='green')
-        plt.xlabel('Number of Possible Moves')
-        plt.ylabel('Average Move Iterations')
-        plt.title('Average Move Iterations per Number of Possible Moves')
-        plt.show()
+
             
