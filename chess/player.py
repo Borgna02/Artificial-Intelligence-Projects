@@ -3,19 +3,36 @@ from typing import Literal
 from minmax import MinMax, Algorithms
 MAX_NUM_OF_PIECES = 16
 
+
 class Player:
-    def __init__(self, chess, color: Literal["white", "black"], algorithm: Algorithms, heuristic: Literal["standard", "better"] = "standard", statistics_mode=False):
+    def __init__(self, color: Literal["white", "black"], algorithm: Algorithms, engine_params: dict, strong_level: int, statistics_mode=False):
         self.color = color
-        self.chess = chess
-        
+        self.strong_level = strong_level
+        self.algorithm = algorithm
+        self.engine_params = engine_params
+
         # Dictionary to store the move to get a certain board
         self.move_to_the_board = {}
-        
+
         # Deque to store last 16 moves
         self.last_moves = deque(maxlen=16)
 
+        # Statistics
+        if statistics_mode:
+            self.completed_moves_per_npieces = {i: 0 for i in range(
+                1, MAX_NUM_OF_PIECES + 1)}  # Numero di mosse per numero di pezzi
+            self.move_times_per_npieces = {
+                i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
+
+            # Numero di mosse per numero di mosse possibili
+            self.completed_moves_per_nmoves = {}
+            self.move_times_per_nmoves = {}
+
+    def set_chess(self, chess):
+        self.chess = chess
+
         # Dynamically assign evaluate based on heuristic
-        self.evaluate = lambda board: getattr(self, f"{heuristic}_evaluate_chessboard")(
+        self.evaluate = lambda board: self.combined_evaluation(
             self.color if self.engine.maximizing_player else (
                 "black" if self.color == "white" else "white"),
             board,
@@ -27,207 +44,13 @@ class Player:
                 "black" if self.color == "white" else "white"),
             board
         )
-        
-        self.engine = MinMax(self.get_children, self.evaluate, algorithm)
-        self.choose_move = self.engine.engine
-        
-        
-        # Statistics
-        if statistics_mode:
-            self.completed_moves_per_npieces = {i: 0 for i in range (1, MAX_NUM_OF_PIECES + 1)} # Numero di mosse per numero di pezzi
-            self.move_times_per_npieces = {i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
-            
-            self.completed_moves_per_nmoves = {} # Numero di mosse per numero di mosse possibili
-            self.move_times_per_nmoves = {}
-            
-    def register_statistics(self,
-        n_pieces: int,
-        n_moves: int,
-        elapsed_time: float,
-    ):
-       
-        # Register statistics
-        self.completed_moves_per_npieces[n_pieces] = self.completed_moves_per_npieces.get(n_pieces, 0) + 1
-        self.completed_moves_per_nmoves[n_moves] = self.completed_moves_per_nmoves.get(n_moves, 0) + 1
 
-        self.move_times_per_npieces[n_pieces] = self.move_times_per_npieces.get(n_pieces, 0.0) + elapsed_time
-        self.move_times_per_nmoves[n_moves] = self.move_times_per_nmoves.get(n_moves, 0.0) + elapsed_time
+        self.engine = MinMax(self.get_children, self.evaluate, self.algorithm)
 
+    def choose_move(self, board):
 
-    
-    def standard_evaluate_chessboard(self, player_color: Literal["white", "black"], board):
-        """
-        Heuristic evaluation function for chess based on material advantage.
+        return self.engine.engine(board, **self.engine_params)
 
-        Args:
-            board (dict): Configurazione corrente della scacchiera.
-            player_color (str): Colore del giocatore corrente ("white" o "black").
-
-        Returns:
-            int: Punteggio della scacchiera per il giocatore specificato.
-        """
-        PIECE_VALUES = {
-            "pawn": 1,
-            "knight": 3,
-            "bishop": 3,
-            "rook": 5,
-            "queen": 9,
-            "king": 0
-        }
-
-        pieces = self.chess.get_available_pieces(board)
-        score = 0
-
-        for piece in pieces["white"]:
-            piece_name = piece["piece_name"]
-            if player_color == "white":
-                score += PIECE_VALUES[piece_name]
-            else:
-                score -= PIECE_VALUES[piece_name]
-
-        for piece in pieces["black"]:
-            piece_name = piece["piece_name"]
-            if player_color == "black":
-                score += PIECE_VALUES[piece_name]
-            else:
-                score -= PIECE_VALUES[piece_name]
-
-        return score
-
-    def better_evaluate_chessboard(self, player_color:Literal["white", "black"], board):
-        """
-        Heuristic evaluation function for chess based on material advantage,
-        piece mobility, control of the center, and king safety.
-
-        Args:
-            board (dict): Configurazione corrente della scacchiera.
-            player_color (str): Colore del giocatore corrente ("white" o "black").
-
-        Returns:
-            int: Punteggio della scacchiera per il giocatore specificato.
-        """
-        PIECE_VALUES = {
-            "pawn": 1,
-            "knight": 3,
-            "bishop": 3,
-            "rook": 5,
-            "queen": 9,
-            "king": 0
-        }
-
-        # Central squares (e4, d4, e5, d5)
-        CENTER_SQUARES = [(3, 3), (3, 4), (4, 3), (4, 4)]
-        pieces = self.chess.get_available_pieces(board)
-
-        score = 0
-
-        # Valutazione dei pezzi bianchi
-        for piece in pieces["white"]:
-            piece_name = piece["piece_name"]
-            piece_coordinates = piece["piece_coordinates"]
-
-            # Material advantage
-            score += PIECE_VALUES[piece_name] if player_color == "white" else - \
-                PIECE_VALUES[piece_name]
-
-            # Bonus for controlling the center
-            if tuple(piece_coordinates) in CENTER_SQUARES:
-                score += 0.5 if player_color == "white" else -0.5
-
-            # Bonus for piece mobility
-            moves = self.chess.possible_moves(
-                f"white_{piece_name}", piece_coordinates, board)
-            # 0.1 point for each possible move
-            mobility_score = len(moves) * 0.1
-            score += mobility_score if player_color == "white" else -mobility_score
-
-        # Valutazione dei pezzi neri
-        for piece in pieces["black"]:
-            piece_name = piece["piece_name"]
-            piece_coordinates = piece["piece_coordinates"]
-
-            # Material advantage
-            score += PIECE_VALUES[piece_name] if player_color == "black" else - \
-                PIECE_VALUES[piece_name]
-
-            # Bonus for controlling the center
-            if tuple(piece_coordinates) in CENTER_SQUARES:
-                score += 0.5 if player_color == "black" else -0.5
-
-            # Bonus for piece mobility
-            moves = self.chess.possible_moves(
-                f"black_{piece_name}", piece_coordinates, board)
-            # 0.1 point for each possible move
-            mobility_score = len(moves) * 0.1
-            score += mobility_score if player_color == "black" else -mobility_score
-
-        # Penalizzazione per i re esposti
-        try:
-            white_king = next(
-                piece for piece in pieces["white"] if piece["piece_name"] == "king")
-            white_king_safety = self.evaluate_king_safety(
-                white_king["piece_coordinates"], board, player_color)
-        except StopIteration:
-            # Il re bianco è stato mangiato, punteggio minimo
-            return float('-inf') if player_color == "white" else float('inf')
-
-        try:
-            black_king = next(
-                piece for piece in pieces["black"] if piece["piece_name"] == "king")
-            black_king_safety = self.evaluate_king_safety(
-                black_king["piece_coordinates"], board, player_color)
-        except StopIteration:
-            # Il re nero è stato mangiato, punteggio minimo
-            return float('-inf') if player_color == "black" else float('inf')
-
-        # Considera la sicurezza del re nel punteggio finale
-        if player_color == "white":
-            score += white_king_safety - black_king_safety
-        else:
-            score += black_king_safety - white_king_safety
-
-        return score
-
-    def evaluate_king_safety(self, king_position, board, player_color):
-        """
-        Evaluates the safety of a king based on its surroundings.
-        """
-        safe_squares = []
-        opponent_color = "white" if player_color == "black" else "black"
-
-        # Offset per le caselle adiacenti al re (raggio 1)
-        adjacent_offsets = [
-            (-1, -1), (-1, 0), (-1, 1),
-            (0, -1),         (0, 1),
-            (1, -1), (1, 0), (1, 1)
-        ]
-
-        # Ottieni tutte le mosse possibili dei pezzi avversari
-        opponent_moves = set()
-        
-        moves = self.chess.get_all_possible_moves(opponent_color, board)
-        
-        # for piece in self.chess.get_available_pieces(board)[opponent_color]:
-        #     piece_name = f"{opponent_color}_{piece['piece_name']}"
-        #     piece_moves = self.chess.possible_moves(
-        #         piece_name, piece["piece_coordinates"], board)
-
-        #     # Converti ogni mossa in una tupla prima di aggiungerla al set
-        for piece_moves in moves.values():
-            for move in piece_moves:
-                opponent_moves.add(tuple(move))
-
-        # Verifica le caselle attorno al re
-        for offset in adjacent_offsets:
-            x, y = king_position[0] + offset[0], king_position[1] + offset[1]
-
-            # Assicurati che la casella sia valida e all'interno dei limiti della scacchiera
-            if 0 <= x < 8 and 0 <= y < 8:
-                if (x, y) not in opponent_moves:  # Controlla se la casella è sicura
-                    safe_squares.append([x, y])
-
-        return len(safe_squares) * -0.2  # Penalize for fewer safe squares
-    
     def detect_cycle(self, cycle_length):
         """
         Rileva se gli ultimi movimenti contengono un ciclo della lunghezza specificata.
@@ -246,6 +69,142 @@ class Player:
 
         # Confronta la prima metà con la seconda metà
         return all(
-            self.last_moves[i + offset] == self.last_moves[i + offset + cycle_length]
+            self.last_moves[i + offset] == self.last_moves[i +
+                                                           offset + cycle_length]
             for i in range(cycle_length)
         )
+        
+    def register_statistics(self,
+                            n_pieces: int,
+                            n_moves: int,
+                            elapsed_time: float,
+                            ):
+
+        # Register statistics
+        self.completed_moves_per_npieces[n_pieces] = self.completed_moves_per_npieces.get(
+            n_pieces, 0) + 1
+        self.completed_moves_per_nmoves[n_moves] = self.completed_moves_per_nmoves.get(
+            n_moves, 0) + 1
+
+        self.move_times_per_npieces[n_pieces] = self.move_times_per_npieces.get(
+            n_pieces, 0.0) + elapsed_time
+        self.move_times_per_nmoves[n_moves] = self.move_times_per_nmoves.get(
+            n_moves, 0.0) + elapsed_time
+
+    def evaluate_material(self, player_color: Literal["white", "black"], board):
+        """
+        Valuta il vantaggio materiale del giocatore.
+        """
+        PIECE_VALUES = {"pawn": 1, "knight": 3, "bishop": 3, "rook": 5, "queen": 9, "king": 20}
+        pieces = self.chess.get_available_pieces(board)
+        score = 0
+
+        for piece in pieces["white"]:
+            value = PIECE_VALUES[piece["piece_name"]]
+            score += value if player_color == "white" else -value
+
+        for piece in pieces["black"]:
+            value = PIECE_VALUES[piece["piece_name"]]
+            score += value if player_color == "black" else -value
+
+        return score
+
+    def evaluate_mobility(self, player_color: Literal["white", "black"], board):
+        """
+        Valuta la mobilità dei pezzi (numero di mosse possibili).
+        """
+        pieces = self.chess.get_available_pieces(board)
+        mobility_score = 0
+
+        for piece in pieces[player_color]:
+            moves = self.chess.possible_moves(f"{player_color}_{piece['piece_name']}", piece["piece_coordinates"], board)
+            mobility_score += len(moves) * 0.1  # Ogni mossa vale 0.1 punti
+
+        return mobility_score
+
+    def evaluate_center_control(self, player_color: Literal["white", "black"], board):
+        """
+        Valuta il controllo del centro della scacchiera.
+        """
+        CENTER_SQUARES = {(3, 3), (3, 4), (4, 3), (4, 4)}
+        pieces = self.chess.get_available_pieces(board)
+        center_score = 0
+
+        for piece in pieces[player_color]:
+            if tuple(piece["piece_coordinates"]) in CENTER_SQUARES:
+                center_score += 0.5  # Bonus per controllare il centro
+
+        return center_score
+
+    def evaluate_king_safety(self, player_color: Literal["white", "black"], board):
+        """
+        Valuta la sicurezza del re basandosi sul numero di caselle sicure attorno al re.
+        """
+        opponent_color = "black" if player_color == "white" else "white"
+        adjacent_offsets = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),         (0, 1),
+            (1, -1), (1, 0), (1, 1)
+        ]
+        
+        # Trova la posizione del re
+        pieces = self.chess.get_available_pieces(board)
+        try:
+            king_position = next(piece["piece_coordinates"] 
+                                for piece in pieces[player_color] 
+                                if piece["piece_name"] == "king")
+        except StopIteration:
+            # Se il re è stato catturato, sicurezza minima
+            return float('-10')  # Penalità molto alta
+
+        # Ottieni tutte le mosse possibili dei pezzi avversari
+        opponent_moves = set()
+        moves = self.chess.get_all_possible_moves(opponent_color, board)
+        for piece_moves in moves.values():
+            for move in piece_moves:
+                opponent_moves.add(tuple(move))
+        
+        # Conta le caselle sicure intorno al re
+        safe_squares = 0
+        for offset in adjacent_offsets:
+            x, y = king_position[0] + offset[0], king_position[1] + offset[1]
+            if 0 <= x < 8 and 0 <= y < 8:  # Assicurati che la casella sia valida
+                if (x, y) not in opponent_moves:
+                    safe_squares += 1  # Casella sicura
+        
+        # Penalizzazione basata sul numero di caselle sicure
+        return safe_squares * -0.2
+
+
+    def evaluate_opponent_threats(self, player_color: Literal["white", "black"], board):
+        """
+        Penalizza le minacce dirette ai pezzi del giocatore.
+        """
+        opponent_color = "black" if player_color == "white" else "white"
+        opponent_moves = self.chess.get_all_possible_moves(opponent_color, board)
+        threatened_score = 0
+
+        for piece in self.chess.get_available_pieces(board)[player_color]:
+            if tuple(piece["piece_coordinates"]) in opponent_moves:
+                threatened_score -= 1  # Penalità per pezzi minacciati
+
+        return threatened_score
+
+    def combined_evaluation(self, player_color: Literal["white", "black"], board):
+        """
+        Combina le valutazioni euristiche in base al livello di forza.
+        """
+        strong_level = self.strong_level
+        score = 0
+        if strong_level >= 1:
+            score += self.evaluate_material(player_color, board)
+        if strong_level >= 2:
+            score += self.evaluate_mobility(player_color, board)
+        if strong_level >= 3:
+            score += self.evaluate_center_control(player_color, board)
+        if strong_level >= 4:
+            score += self.evaluate_king_safety(player_color, board)
+        if strong_level >= 5:
+            score += self.evaluate_opponent_threats(player_color, board)
+        
+        return score

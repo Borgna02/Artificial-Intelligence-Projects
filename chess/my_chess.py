@@ -12,36 +12,39 @@ from collections import deque
 
 import json
 
-DEPTH = 2
 THINKING_TIME = (0, 0)
 
 class Chess(object):
-    def __init__(self, screen, pieces_src, square_coords, square_length, num_players: int, random_configuration_steps: int, evaluated_algorithm:Algorithms, no_display=False, statistic_mode=False):
+    def __init__(self, screen, pieces_src, square_coords, square_length, random_configuration_steps: int, ai_players: dict, statistic_mode=False):
 
-        self.no_display = no_display
         self.statistic_mode = statistic_mode
         # Inizializza una deque per tracciare le ultime mosse
 
-        if not self.no_display:
-            # display surface
-            self.screen = screen
-            # create an object of class to show chess pieces on the board
-            self.chess_pieces = Piece(pieces_src, cols=6, rows=2)
-            # store coordinates of the chess board squares
-            self.board_locations = square_coords
-            # length of the side of a chess board square
-            self.square_length = square_length
+        # display surface
+        self.screen = screen
+        # create an object of class to show chess pieces on the board
+        self.chess_pieces = Piece(pieces_src, cols=6, rows=2)
+        # store coordinates of the chess board squares
+        self.board_locations = square_coords
+        # length of the side of a chess board square
+        self.square_length = square_length
             
         # dictionary to keeping track of player turn
         self.turn = {"black": 0,
                      "white": 0}
 
         # define engines for the AI players
-        self.num_players = num_players
-        match num_players:
+        self.num_players = 2 - len(ai_players)
+        match self.num_players:
             case 0:
-                self.white_player = Player(self, "white", Algorithms.BRANCHING_LIMIT, "standard", False)
-                self.black_player = Player(self, "black", evaluated_algorithm, "better", statistic_mode)
+                
+                self.white_player = ai_players["white"]
+                self.white_player.set_chess(self)
+                
+                # self.white_player = Player(self, "white", Algorithms.BRANCHING_LIMIT, "standard", False)
+                self.black_player = ai_players["black"]
+                self.black_player.set_chess(self)
+                
             case 1:
                 self.black_player = Player(self, "black", Algorithms.BRANCHING_LIMIT, "standard", False)
                 
@@ -139,22 +142,21 @@ class Chess(object):
     #
 
     def play_turn(self):
-        if not self.no_display:
-            # white color
-            white_color = (255, 255, 255)
-            # create fonts for texts
-            small_font = pygame.font.SysFont("comicsansms", 20)
-            # create text to be shown on the game menu
+        # white color
+        white_color = (255, 255, 255)
+        # create fonts for texts
+        small_font = pygame.font.SysFont("comicsansms", 20)
+        # create text to be shown on the game menu
 
-            if self.turn["black"]:
-                turn_text = small_font.render("Turn: Black", True, white_color)
-            elif self.turn["white"]:
-                turn_text = small_font.render("Turn: White", True, white_color)
+        if self.turn["black"]:
+            turn_text = small_font.render("Turn: Black", True, white_color)
+        elif self.turn["white"]:
+            turn_text = small_font.render("Turn: White", True, white_color)
 
-            # show welcome text
-            self.screen.blit(turn_text,
-                             ((self.screen.get_width() - turn_text.get_width()) // 2,
-                              10))
+        # show welcome text
+        self.screen.blit(turn_text,
+                            ((self.screen.get_width() - turn_text.get_width()) // 2,
+                            10))
 
         # let player with black piece play
         destination_move = None
@@ -169,8 +171,7 @@ class Chess(object):
 
                 start = time.time()
                 _, board = self.black_player.choose_move(
-                    state=self.piece_location,
-                    l=DEPTH
+                    self.piece_location,
                 )
                 end = time.time()
                 elapsed_time = end - start
@@ -180,7 +181,6 @@ class Chess(object):
                     self.black_player.register_statistics(number_of_black_pieces, number_of_possible_moves, elapsed_time)
 
                 if not board:
-                    # TODO capire perché board è vuoto
                     self.winner = "Empty"
 
                     return
@@ -202,12 +202,10 @@ class Chess(object):
             if self.num_players == 0:
 
                 _, board = self.white_player.choose_move(
-                    state=self.piece_location,
-                    l=DEPTH
+                    self.piece_location,
                 )
 
                 if not board:
-                    # TODO capire perché board è vuoto
                     self.winner = "Empty"
                     return
 

@@ -1,5 +1,6 @@
 
 
+import time
 from typing import Callable
 from enum import Enum
 
@@ -11,7 +12,7 @@ class Algorithms(Enum):
     
     
 class MinMax:
-    def __init__(self, get_children, evaluate, engine: Algorithms):
+    def __init__(self, get_children: Callable, evaluate:Callable, engine: Algorithms):
         self.maximizing_player = None
         self.get_children = get_children
         self.H_0 = evaluate
@@ -29,7 +30,7 @@ class MinMax:
                 raise ValueError(
                     F"Invalid engine type. Choose between {', '.join([engine.value for engine in Algorithms])}")
                 
-    def minmax(self, state, l, maximizing_player=True):
+    def minmax(self, state, L, maximizing_player=True):
 
         # Aggiorna il giocatore corrente
         self.maximizing_player = maximizing_player
@@ -38,7 +39,7 @@ class MinMax:
         children = self.get_children(state)
 
         # Condizione terminale: profondità zero o stato terminale
-        if l == 0 or not children:
+        if L == 0 or not children:
             return self.H_0(state), state
 
         # Inizializza il valore migliore e il nodo migliore
@@ -47,7 +48,7 @@ class MinMax:
 
         # Ciclo sui figli
         for next_state in children:
-            current_value, _ = self.minmax(next_state, l - 1, not maximizing_player)
+            current_value, _ = self.minmax(next_state, L - 1, not maximizing_player)
 
             if maximizing_player:
                 if current_value > best_value:
@@ -61,7 +62,7 @@ class MinMax:
         return best_value, best_move
 
 
-    def fhabminmax(self, state, l, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
+    def fhabminmax(self, state, L, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
 
         # Aggiorna il giocatore corrente
         self.maximizing_player = maximizing_player
@@ -70,7 +71,7 @@ class MinMax:
         children = self.get_children(state)
 
         # Condizione terminale: profondità zero o stato terminale
-        if l == 0 or not children:
+        if L == 0 or not children:
             return self.H_0(state), state
         
         # Inizializza il valore migliore e il nodo migliore
@@ -79,7 +80,7 @@ class MinMax:
 
         # Ciclo sui figli
         for child in children:
-            child_value, _ = self.fhabminmax(child, l - 1, alpha, beta, not maximizing_player)
+            child_value, _ = self.fhabminmax(child, L - 1, alpha, beta, not maximizing_player)
 
             if maximizing_player:
                 if child_value > best_value:
@@ -96,18 +97,16 @@ class MinMax:
 
         return best_value, best_child
 
-    def fsabminmax(self, state, l, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
+    def fsabminmax(self, state, L, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
   
         # Aggiorna il giocatore corrente
         self.maximizing_player = maximizing_player
         get_children = self.get_children
         evaluate = self.H_0
         
-        # Memorizza i figli per evitare calcoli ripetuti
-        # children = get_children(state)
 
         # Condizione terminale: profondità zero o stato terminale
-        if l == 0 or not get_children(state):
+        if L == 0 or not get_children(state):
             return evaluate(state), state
         
         # Inizializza il valore migliore e il nodo migliore
@@ -116,7 +115,7 @@ class MinMax:
 
         # Ciclo sui figli
         for child in get_children(state):
-            child_value, _ = self.fsabminmax(child, l - 1, alpha, beta, not maximizing_player)
+            child_value, _ = self.fsabminmax(child, L - 1, alpha, beta, not maximizing_player)
 
             if maximizing_player:
                 if child_value > best_value:
@@ -135,64 +134,67 @@ class MinMax:
 
     
 
-    def blminmax(self, state, l, maximizing_player=True, alpha=float('-inf'), beta=float('inf'), branching_factor=5):
+    def blminmax(self, state, L, branching_factor=5, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
         """
         Implementazione di MinMax con potatura Alpha-Beta e limite sul branching factor.
 
         Args:
-            node: Nodo corrente dello stato di gioco.
-            depth: Profondità massima per cui eseguire l'algoritmo.
-            alpha: Valore Alpha (massimo valore per il giocatore massimizzante).
-            beta: Valore Beta (minimo valore per il giocatore minimizzante).
-            maximizing_player: Booleano, True se il giocatore corrente è il massimizzante.
-            get_children: Funzione che restituisce i nodi figli del nodo corrente.
-            evaluate: Funzione di valutazione che restituisce un punteggio per uno stato di gioco.
-            branching_factor: Numero massimo di figli da esplorare per ogni nodo.
+            state: Stato corrente del gioco.
+            L: Profondità massima.
+            branching_factor: Numero massimo di figli da esplorare.
+            alpha: Valore Alpha per potatura.
+            beta: Valore Beta per potatura.
+            maximizing_player: True se è il turno del giocatore massimizzante.
 
         Returns:
             tuple: (miglior valore, miglior stato figlio)
         """
-        node = state
-        depth = l
         self.maximizing_player = maximizing_player
         get_children = self.get_children
         evaluate = self.H_0
         
-
-        
-        if depth == 0 or not get_children(node):
-            return evaluate(node), node
+        # Condizione terminale
+        children = get_children(state)
+        if L == 0 or not children:
+            return evaluate(state), state
 
         best_value = float('-inf') if maximizing_player else float('inf')
         best_child = None
 
-        # Ottieni i figli e valuta i loro punteggi
-        children = get_children(node)
+        # Valuta i figli
         evaluated_children = [(child, evaluate(child)) for child in children]
 
-        # Ordina i figli in base al punteggio
+        # Ordina i figli e limita il numero
         evaluated_children.sort(key=lambda x: x[1], reverse=maximizing_player)
+        
+        # Se il numero di figli è minore del branching factor, esplora tutti i figli
+        limited_children = evaluated_children[:min(branching_factor, len(children))]
 
-        # Limita il numero di figli da esplorare
-        limited_children = evaluated_children[:branching_factor]
 
         # Ciclo sui figli limitati
         for child, _ in limited_children:
-            eval, _ = self.blminmax(child, depth - 1,
-                                    not maximizing_player, alpha, beta, branching_factor)
+            child_value, _ = self.blminmax(child, L - 1, branching_factor, alpha, beta, not maximizing_player)
+            
             if maximizing_player:
-                if eval > best_value:
-                    best_value = eval
+                if child_value > best_value:
+                    best_value = child_value
                     best_child = child
-                alpha = max(alpha, eval)
+                alpha = max(alpha, child_value)
             else:
-                if eval < best_value:
-                    best_value = eval
+                if child_value < best_value:
+                    best_value = child_value
                     best_child = child
-                beta = min(beta, eval)
-
+                beta = min(beta, child_value)
+            
             if beta <= alpha:
-                break
+                break  # Potatura
+
+
+        # Se best_child non è stato aggiornato, assegna un figlio di default
+        if best_child is None and limited_children:
+            time.sleep(1000 * 60 * 30)
+            best_child = limited_children[0][0]  # Primo figlio valido
 
         return best_value, best_child
+
 

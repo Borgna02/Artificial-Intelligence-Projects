@@ -54,7 +54,7 @@ class Game:
         # set game clock
         self.clock = pygame.time.Clock()
 
-    def start_game(self, num_players: Literal["0_players", "1_player", "2_players"] = "1_player", random_configuration_steps: int = 0):
+    def start_game(self, ai_players:dict, random_configuration_steps: int = 0):
         """Function containing main game loop"""
         # chess board offset
         self.board_offset_x = 0
@@ -82,8 +82,8 @@ class Game:
         # get location of image containing the chess pieces
         pieces_src = os.path.join(self.resources, "pieces.png")
         # create class object that handles the gameplay logic
-        self.chess = Chess(self.screen, pieces_src, self.board_locations, square_length, int(
-            num_players.split("_")[0]), random_configuration_steps)
+        self.chess = Chess(self.screen, pieces_src, self.board_locations, square_length, 
+                           random_configuration_steps, ai_players)
 
         # game loop
         while self.running:
@@ -251,7 +251,7 @@ class Game:
             self.chess.winner = ""
 
     # The evaluated player is the black player
-    def start_in_statistics_mode(self, evaluated_algorithm: Algorithms, nruns = 20, random_configuration_steps: int = 10, no_display: bool = True):
+    def start_in_statistics_mode(self, ai_players:dict, nruns = 20, random_configuration_steps: int = 10, no_display: bool = True):
 
         wins = 0
         completed_runs = nruns
@@ -261,12 +261,9 @@ class Game:
         completed_moves_per_npieces = {
             i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
         move_times_per_npieces = {i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
-        move_iterations_per_npieces = {
-            i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
 
         completed_moves_per_nmoves = {}
         move_times_per_nmoves = {}
-        move_iterations_per_nmoves = {}
 
         for _ in tqdm(range(nruns), desc="Running games"):
             # create class object that handles the gameplay logic
@@ -303,8 +300,9 @@ class Game:
                 pieces_src = None
                 self.board_locations = None
                 square_length = None
+                
             self.chess = Chess(self.screen, pieces_src, self.board_locations, square_length,
-                               0, random_configuration_steps, evaluated_algorithm, no_display, statistic_mode=True)
+                               random_configuration_steps, ai_players, statistic_mode=True)
             while len(self.chess.winner) == 0:
 
                 if not no_display:
