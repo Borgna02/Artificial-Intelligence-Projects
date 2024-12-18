@@ -985,3 +985,63 @@ class Chess(object):
 
 
     
+    def is_square_attacked(self, square, attacker_color, board):
+        """
+        Determina se una casella è attaccata da un pezzo di un certo colore.
+        
+        Args:
+            square (tuple): Coordinata della casella (x, y).
+            attacker_color (str): Colore degli attaccanti ("white" o "black").
+            board: La configurazione corrente della scacchiera.
+        
+        Returns:
+            bool: True se la casella è attaccata, False altrimenti.
+        """
+        # Ottieni tutte le mosse possibili per i pezzi del colore attaccante
+        possible_moves = self.get_all_possible_moves(attacker_color, board)
+        
+        # Controlla se la casella è inclusa in una delle mosse
+        for moves in possible_moves.values():
+            if square in moves:
+                return True
+        return False
+    
+    def determine_phase(self):
+        """
+        Determina la fase della partita basandosi sul materiale e la posizione dei pezzi.
+        
+        Args:
+            board: Configurazione corrente della scacchiera.
+
+        Returns:
+            str: "opening", "middlegame", o "endgame".
+        """
+
+        # Definizione dei valori dei pezzi (escludendo il re)
+        piece_values = {
+            "pawn": 1,
+            "knight": 3,
+            "bishop": 3,
+            "rook": 5,
+            "queen": 9,
+            "king": 0  # Il re è escluso dal calcolo del materiale
+        }
+
+        # Ottieni i pezzi disponibili
+        available_pieces = self.get_available_pieces()
+
+        # Calcola il materiale totale
+        total_material = sum(
+            piece_values[piece["piece_name"]]
+            for color in available_pieces
+            for piece in available_pieces[color]
+            if piece["piece_name"] != "king"  # Escludi il re
+        )
+
+        # Determina la fase della partita in base al materiale totale
+        if total_material > 20:
+            return "opening"
+        elif total_material > 10:
+            return "middlegame"
+        else:
+            return "endgame"

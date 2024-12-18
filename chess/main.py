@@ -4,7 +4,7 @@ from player import Player
 if __name__ == "__main__":
 
     black = Player("black", Algorithms.BRANCHING_LIMIT, {
-                   "L": 5, "branching_factor": 1}, 1, True)
+                   "L": 5, "branching_factor": 1}, 0, True)
     white = Player("white", Algorithms.BRANCHING_LIMIT, {
                    "L": 5, "branching_factor": 1}, 6, True)
 

@@ -19,7 +19,7 @@ class Game:
         if self.in_jupyter:
             # Use a virtual display for Pygame in Jupyter
             os.environ["SDL_VIDEODRIVER"] = "dummy"
-            
+
         # screen dimensions
         screen_width = 640
         screen_height = 750
@@ -54,7 +54,7 @@ class Game:
         # set game clock
         self.clock = pygame.time.Clock()
 
-    def start_game(self, ai_players:dict, random_configuration_steps: int = 0):
+    def start_game(self, ai_players: dict, random_configuration_steps: int = 0):
         """Function containing main game loop"""
         # chess board offset
         self.board_offset_x = 0
@@ -82,7 +82,7 @@ class Game:
         # get location of image containing the chess pieces
         pieces_src = os.path.join(self.resources, "pieces.png")
         # create class object that handles the gameplay logic
-        self.chess = Chess(self.screen, pieces_src, self.board_locations, square_length, 
+        self.chess = Chess(self.screen, pieces_src, self.board_locations, square_length,
                            random_configuration_steps, ai_players)
 
         # game loop
@@ -251,7 +251,9 @@ class Game:
             self.chess.winner = ""
 
     # The evaluated player is the black player
-    def start_in_statistics_mode(self, ai_players:dict, nruns = 20, random_configuration_steps: int = 10, no_display: bool = True):
+    def start_in_statistics_mode(self, ai_players: dict, nruns=20, random_configuration_steps: int = 10, plot: bool = True):
+
+        # To not display the game in jupyter
 
         wins = 0
         completed_runs = nruns
@@ -260,69 +262,62 @@ class Game:
         # Numero di mosse per numero di pezzi
         completed_moves_per_npieces = {
             i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
-        move_times_per_npieces = {i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
+        move_times_per_npieces = {
+            i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
 
         completed_moves_per_nmoves = {}
         move_times_per_nmoves = {}
 
         for _ in tqdm(range(nruns), desc="Running games"):
             # create class object that handles the gameplay logic
-            if not no_display:
-                # chess board offset
-                self.board_offset_x = 0
-                self.board_offset_y = 20
-                self.board_dimensions = (
-                    self.board_offset_x, self.board_offset_y)
+            # chess board offset
+            self.board_offset_x = 0
+            self.board_offset_y = 20
+            self.board_dimensions = (
+                self.board_offset_x, self.board_offset_y)
 
-                # get location of chess board image
-                board_src = os.path.join(self.resources, "board.png")
-                # load the chess board image
-                self.board_img = pygame.image.load(board_src).convert()
+            # get location of chess board image
+            board_src = os.path.join(self.resources, "board.png")
+            # load the chess board image
+            self.board_img = pygame.image.load(board_src).convert()
 
-                # get the width of a chess board square
-                square_length = self.board_img.get_rect().width // 8
+            # get the width of a chess board square
+            square_length = self.board_img.get_rect().width // 8
 
-                # initialize list that stores all places to put chess pieces on the board
-                self.board_locations = []
+            # initialize list that stores all places to put chess pieces on the board
+            self.board_locations = []
 
-                # calculate coordinates of the each square on the board
-                for x in range(0, 8):
-                    self.board_locations.append([])
-                    for y in range(0, 8):
-                        self.board_locations[x].append([self.board_offset_x+(x*square_length),
-                                                        self.board_offset_y+(y*square_length)])
+            # calculate coordinates of the each square on the board
+            for x in range(0, 8):
+                self.board_locations.append([])
+                for y in range(0, 8):
+                    self.board_locations[x].append([self.board_offset_x+(x*square_length),
+                                                    self.board_offset_y+(y*square_length)])
 
-                # get location of image containing the chess pieces
-                pieces_src = os.path.join(self.resources, "pieces.png")
-                # create class object that handles the gameplay logic
-            else:
-                self.screen = None
-                pieces_src = None
-                self.board_locations = None
-                square_length = None
-                
+            # get location of image containing the chess pieces
+            pieces_src = os.path.join(self.resources, "pieces.png")
+            # create class object that handles the gameplay logic
+
             self.chess = Chess(self.screen, pieces_src, self.board_locations, square_length,
                                random_configuration_steps, ai_players, statistic_mode=True)
             while len(self.chess.winner) == 0:
 
-                if not no_display:
-                    # background color
-                    color = (0, 0, 0)
-                    # set backgound color
-                    self.screen.fill(color)
+                # background color
+                color = (0, 0, 0)
+                # set backgound color
+                self.screen.fill(color)
 
-                    # show the chess board
-                    self.screen.blit(self.board_img, self.board_dimensions)
+                # show the chess board
+                self.screen.blit(self.board_img, self.board_dimensions)
 
                 self.chess.play_turn()
 
-                if not no_display:
-                    self.chess.draw_pieces()
+                self.chess.draw_pieces()
 
-                    pygame.display.flip()
-                    # update events
-                    pygame.event.pump()
-                    
+                pygame.display.flip()
+                # update events
+                pygame.event.pump()
+                
             if self.chess.winner == "Black":
                 wins += 1
             elif self.chess.winner == "Draw":
@@ -346,9 +341,8 @@ class Game:
 
             # print(f"\r{self.chess.winner} Wins")
 
-        if not no_display:
-            # call method to stop pygame
-            pygame.quit()
+        # call method to stop pygame
+        pygame.quit()
 
         average_move_times_per_npieces = {i: move_times_per_npieces[i] / completed_moves_per_npieces[i] if completed_moves_per_npieces[i] != 0 else 0
                               for i in range(1, MAX_NUM_OF_PIECES + 1)}
@@ -357,30 +351,35 @@ class Game:
         
         average_move_times_per_nmoves = {i: move_times_per_nmoves[i] / completed_moves_per_nmoves[i] if completed_moves_per_nmoves[i] != 0 else 0 for i in sorted(move_times_per_nmoves.keys())}
         
+        ai_players["black"].win_rate = win_rate
+        ai_players["black"].wins = wins
+        ai_players["black"].draws = draws
+        ai_players["black"].failed_runs = failed_runs
+        ai_players["black"].completed_runs = completed_runs
         
-        
 
-        print(f"Average moves times per piece: {average_move_times_per_npieces}")
-        print(f"Win rate: {win_rate}, Wins: {wins}, Draws: {draws}, Runs: {nruns}, Failed: {failed_runs}")
+        if plot:
+            print(f"Average moves times per piece: {average_move_times_per_npieces}")
+            print(f"Win rate: {win_rate}, Wins: {wins}, Draws: {draws}, Runs: {nruns}, Failed: {failed_runs}")
 
-        # Plot average move times
-        plt.figure(figsize=(10, 5))
-        plt.plot(average_move_times_per_npieces.keys(),
-                 average_move_times_per_npieces.values(), color='blue')
-        plt.xlabel('Number of Pieces')
-        plt.ylabel('Average Move Time (s)')
-        plt.title('Average Move Time per Number of Pieces')
-        plt.show()
+            # Plot average move times
+            plt.figure(figsize=(10, 5))
+            plt.plot(average_move_times_per_npieces.keys(),
+                    average_move_times_per_npieces.values(), color='blue')
+            plt.xlabel('Number of Pieces')
+            plt.ylabel('Average Move Time (s)')
+            plt.title('Average Move Time per Number of Pieces')
+            plt.show()
 
 
-        # Plot average move times
-        plt.figure(figsize=(10, 5))
-        plt.plot(average_move_times_per_nmoves.keys(),
-                 average_move_times_per_nmoves.values(), color='blue')
-        plt.xlabel('Number of Possible Moves')
-        plt.ylabel('Average Move Time (s)')
-        plt.title('Average Move Time per Number of Possible Moves')
-        plt.show()
+            # Plot average move times
+            plt.figure(figsize=(10, 5))
+            plt.plot(average_move_times_per_nmoves.keys(),
+                    average_move_times_per_nmoves.values(), color='blue')
+            plt.xlabel('Number of Possible Moves')
+            plt.ylabel('Average Move Time (s)')
+            plt.title('Average Move Time per Number of Possible Moves')
+            plt.show()
         
 
             

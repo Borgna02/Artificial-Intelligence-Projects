@@ -134,7 +134,7 @@ class MinMax:
 
     
 
-    def blminmax(self, state, L, branching_factor=5, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
+    def blminmax(self, state, L, l=0, BF=5, alpha=float('-inf'), beta=float('inf'), maximizing_player=True):
         """
         Implementazione di MinMax con potatura Alpha-Beta e limite sul branching factor.
 
@@ -162,18 +162,18 @@ class MinMax:
         best_child = None
 
         # Valuta i figli
-        evaluated_children = [(child, evaluate(child)) for child in children]
+        evaluated_children = [(child, self.blminmax(child, L=min(l, L))[0]) for child in children]
 
         # Ordina i figli e limita il numero
         evaluated_children.sort(key=lambda x: x[1], reverse=maximizing_player)
         
         # Se il numero di figli è minore del branching factor, esplora tutti i figli
-        limited_children = evaluated_children[:min(branching_factor, len(children))]
+        limited_children = evaluated_children[:min(BF, len(children))]
 
 
         # Ciclo sui figli limitati
         for child, _ in limited_children:
-            child_value, _ = self.blminmax(child, L - 1, branching_factor, alpha, beta, not maximizing_player)
+            child_value, _ = self.blminmax(child, L - 1, l, BF, alpha, beta, not maximizing_player)
             
             if maximizing_player:
                 if child_value > best_value:
