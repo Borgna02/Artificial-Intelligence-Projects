@@ -12,7 +12,6 @@ from collections import deque
 
 import json
 
-THINKING_TIME = (0, 0)
 
 class Chess(object):
     def __init__(self, screen, pieces_src, square_coords, square_length, random_configuration_steps: int, ai_players: dict, statistic_mode=False):
@@ -46,8 +45,17 @@ class Chess(object):
                 self.black_player.set_chess(self)
                 
             case 1:
-                self.black_player = Player(self, "black", Algorithms.BRANCHING_LIMIT, "standard", False)
-                
+                if list(ai_players.keys())[0] == "black":
+                    self.black_player = ai_players["black"]
+                    self.black_player.set_chess(self)
+                    self.white_player = None
+                else:
+                    self.white_player = ai_players["white"]
+                    self.white_player.set_chess(self)
+                    self.black_player = None
+            case 2:
+                self.black_player = None
+                self.white_player = None
 
         # list containing possible moves for the selected piece
         self.moves = []
@@ -158,17 +166,15 @@ class Chess(object):
                             ((self.screen.get_width() - turn_text.get_width()) // 2,
                             10))
 
-        # let player with black piece play
-        destination_move = None
         number_of_black_pieces = len(self.get_available_pieces()["black"])
         number_of_possible_moves = sum(len(self.get_all_possible_moves("black")[i]) for i in self.get_all_possible_moves("black").keys())
         
         
+        # let player with black piece play
+        destination_move = None
         if (self.turn["black"]):
             
-
-            if self.num_players < 2:
-
+            if self.black_player:
                 start = time.time()
                 _, board = self.black_player.choose_move(
                     self.piece_location,
@@ -176,59 +182,73 @@ class Chess(object):
                 end = time.time()
                 elapsed_time = end - start
                 
-
                 if self.statistic_mode:
                     self.black_player.register_statistics(number_of_black_pieces, number_of_possible_moves, elapsed_time)
 
                 if not board:
-                    self.winner = "Empty"
+                    self.winner = "Empty l189"
 
                     return
 
-                piece_name, piece_color, (source_coordinates), (
-                    destination_coordinates) = self.black_player.move_to_the_board[json.dumps(board)]
-
+                try:
+                    piece_name, piece_color, (source_coordinates), (
+                        destination_coordinates) = self.black_player.move_to_the_board[json.dumps(board)]
+                    self.black_player.move_to_the_board.clear()
+                except KeyError:
+                    self.winner = "Empty l198"
+                    return
+                    
                 source_move = (piece_name, piece_color, source_coordinates)
                 destination_move = ("", "", destination_coordinates)
 
                 # print("Thinking...")
                 self.move_piece("black", source_move)
-                time.sleep(random.randint(*THINKING_TIME))
 
             self.move_piece("black", destination_move)
 
         # let player with white piece play
         elif (self.turn["white"]):
-            if self.num_players == 0:
+            if self.white_player:
 
                 _, board = self.white_player.choose_move(
                     self.piece_location,
                 )
 
                 if not board:
-                    self.winner = "Empty"
+                    self.winner = "Empty l218"
                     return
 
-                piece_name, piece_color, (source_coordinates), (
-                    destination_coordinates) = self.white_player.move_to_the_board[json.dumps(board)]
+                try:
+                    piece_name, piece_color, (source_coordinates), (
+                        destination_coordinates) = self.white_player.move_to_the_board[json.dumps(board)]
+                    self.white_player.move_to_the_board.clear()
+                except KeyError:
+                    self.winner = "Empty l226"
+                    return
 
                 source_move = (piece_name, piece_color, source_coordinates)
                 destination_move = ("", "", destination_coordinates)
 
                 self.move_piece("white", source_move)
-                time.sleep(random.randint(*THINKING_TIME))
 
             self.move_piece("white", destination_move)
 
-        if self.num_players == 0 and self.turn["black"]:
+        if self.black_player and self.turn["black"]:
             # Aggiungi le mosse
             self.black_player.last_moves.append((source_move, destination_move))
 
             # Controlla se c'è un ciclo
-            if any(self.black_player.detect_cycle(cycle_length=i) for i in range(2, 8)):
+            if any(self.black_player.detect_cycle(cycle_length=i) for i in range(2, 16)):
                 self.winner = "Draw"
                 # method to draw pieces on the chess board
-            
+        
+        if self.white_player and self.turn["white"]:
+            # Aggiungi le mosse
+            self.white_player.last_moves.append((source_move, destination_move))
+
+            # Controlla se c'è un ciclo
+            if any(self.white_player.detect_cycle(cycle_length=i) for i in range(2, 16)):
+                self.winner = "Draw"
     
     def draw_pieces(self):
         transparent_green = (0, 194, 39, 170)
@@ -540,12 +560,11 @@ class Chess(object):
                 self.piece_location[columnChar][rowNo][1] = True
 
     def simulate_move(self, piece_name, piece_coordinates, move, current_board):
-       
-        # Copia della scacchiera per preservare l'originale
+        # Create a copy of the board to preserve the original state
         new_board = {col: {row: cell.copy() for row, cell in rows.items()}
-                     for col, rows in current_board.items()}
+                    for col, rows in current_board.items()}
 
-        # Trova la posizione corrente del pezzo basandosi sulle coordinate
+        # Locate the current position of the piece based on its coordinates
         current_position = None
         for column, rows in current_board.items():
             for row, cell in rows.items():
@@ -556,9 +575,9 @@ class Chess(object):
                 break
 
         if not current_position:
-            raise ValueError(f"Il pezzo {piece_name} con coordinate {piece_coordinates} non è presente sulla scacchiera.")
+            raise ValueError(f"Piece {piece_name} with coordinates {piece_coordinates} is not on the board.")
 
-        # Trova la nuova posizione basandosi sulle coordinate della mossa
+        # Find the new position based on the move coordinates
         new_position = None
         for column, rows in current_board.items():
             for row, cell in rows.items():
@@ -569,17 +588,17 @@ class Chess(object):
                 break
 
         if not new_position:
-            raise ValueError(f"La mossa {move} non è valida.")
+            raise ValueError(f"Move {move} is invalid.")
 
-        # Aggiorna la posizione del pezzo
+        # Update the piece's position
         current_column, current_row = current_position
         new_column, new_row = new_position
 
-        # Rimuovi il pezzo dalla posizione corrente
+        # Remove the piece from its current position
         new_board[current_column][current_row][0] = ''
         new_board[current_column][current_row][1] = False
 
-        # Sposta il pezzo nella nuova posizione
+        # Place the piece in its new position
         new_board[new_column][new_row][0] = piece_name
         new_board[new_column][new_row][1] = True
 

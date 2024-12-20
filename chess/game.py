@@ -1,4 +1,6 @@
 import os
+import random
+import time
 from typing import Literal
 import pygame
 from pygame.locals import *
@@ -299,7 +301,7 @@ class Game:
             # create class object that handles the gameplay logic
 
             self.chess = Chess(self.screen, pieces_src, self.board_locations, square_length,
-                               random_configuration_steps, ai_players, statistic_mode=True)
+                               random.randint(*random_configuration_steps) if isinstance(random_configuration_steps, tuple) else random_configuration_steps, ai_players, statistic_mode=True)
             while len(self.chess.winner) == 0:
 
                 # background color

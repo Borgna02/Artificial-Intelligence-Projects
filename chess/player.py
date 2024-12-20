@@ -2,31 +2,33 @@ from collections import deque
 from typing import Literal
 from minmax import MinMax, Algorithms
 import time
+import os
 MAX_NUM_OF_PIECES = 16
 
 
 class Player:
-    def __init__(self, color: Literal["white", "black"], algorithm: Algorithms, engine_params: dict, strong_level: int, statistics_mode=False):
+    def __init__(self, color: Literal["white", "black"], algorithm: Algorithms, engine_params: dict, heuristic: Literal["MA", "SEF"], statistics_mode=False):
         self.color = color
-        self.strong_level = strong_level
+        self.heuristic = heuristic
         self.algorithm = algorithm
         self.engine_params = engine_params
 
-        # Dictionary to store the move to get a certain board
+        # Dictionary to store the move that leads to a specific board state
         self.move_to_the_board = {}
 
-        # Deque to store last 16 moves
+        # Deque to store the last 16 moves
         self.last_moves = deque(maxlen=16)
 
         # Statistics
         self.statistics_mode = statistics_mode
         if statistics_mode:
+            # Number of moves for each possible number of pieces on the board
             self.completed_moves_per_npieces = {i: 0 for i in range(
-                1, MAX_NUM_OF_PIECES + 1)}  # Numero di mosse per numero di pezzi
+                1, MAX_NUM_OF_PIECES + 1)}
             self.move_times_per_npieces = {
                 i: 0 for i in range(1, MAX_NUM_OF_PIECES + 1)}
 
-            # Numero di mosse per numero di mosse possibili
+            # Number of moves for each possible number of available moves
             self.completed_moves_per_nmoves = {}
             self.move_times_per_nmoves = {}
 
@@ -50,34 +52,74 @@ class Player:
         self.engine = MinMax(self.get_children, self.evaluate, self.algorithm)
 
     def choose_move(self, board):
-        
-        print
-        best_value, best_board = self.engine.engine(board, **self.engine_params) 
 
-        if self.statistics_mode:
-            # Save the tuple H_0, H_L
-            with open('dataset.csv', 'a') as f:
-                f.write(f"{self.evaluate(board)},{best_value}\n")
+        if self.algorithm == Algorithms.MULTI_INPUT_PRED_BLMINMAX:
+            player_color = self.color
+            material, pawn_structure, center_control_val, mobility_val, king_safety_val, phase = self.simplified_evaluation(
+                player_color, board, split=True)
+            num_pieces = len(
+                self.chess.get_available_pieces(board)[player_color])
+            num_moves = sum(len(self.chess.get_all_possible_moves(player_color)[
+                            i]) for i in self.chess.get_all_possible_moves(player_color).keys())
+            opponent_pieces = len(self.chess.get_available_pieces(
+                board)["black" if player_color == "white" else "white"])
+            best_value, best_board = self.engine.engine(
+                board, **self.engine_params, features=[material, pawn_structure, center_control_val, mobility_val, king_safety_val, 0 if phase == "opening" else 1 if phase == "middlegame" else 2, num_pieces, num_moves, opponent_pieces, self.evaluate(board)], features_names=["material", "pawn_structure", "center_control_val", "mobility_val", "king_safety_val", "phase", "num_pieces", "num_moves", "opponent_pieces", "evaluation"])
+        else:
+            best_value, best_board = self.engine.engine(
+                board, **self.engine_params)
 
+        # if self.statistics_mode:
+        #     # Ottieni i valori SEF
+        #     player_color = self.color
+
+        #     material, pawn_structure, center_control_val, mobility_val, king_safety_val, phase = self.simplified_evaluation(
+        #         player_color, board, split=True)
+
+        #     phase = 0 if phase == "opening" else 1 if phase == "middlegame" else 2
+
+        #     num_pieces = len(
+        #         self.chess.get_available_pieces(board)[player_color])
+        #     num_moves = sum(len(self.chess.get_all_possible_moves(player_color)[
+        #                     i]) for i in self.chess.get_all_possible_moves(player_color).keys())
+        #     opponent_pieces = len(self.chess.get_available_pieces(
+        #         board)["black" if player_color == "white" else "white"])
+
+        #     data = [material, pawn_structure, center_control_val, mobility_val, king_safety_val,
+        #             phase, num_pieces, num_moves, opponent_pieces, self.evaluate(board), best_value]
+
+        #    # Check if the file exists
+        #     file_exists = os.path.isfile('dataset_L3_l1_3.csv')
+        #     with open('dataset_L3_l1_3.csv', 'a') as f:
+        #         if not file_exists:
+        #             f.write("evaluation,best_value\n")
+        #         f.write(f"{self.evaluate(board)},{best_value}\n")
+
+        #     file_exists = os.path.isfile('dataset_mi_L3_l1_3.csv')
+        #     with open('dataset_mi_L3_l1_3.csv', 'a') as f:
+        #         if not file_exists:
+        #             f.write(
+        #                 "material,pawn_structure,center_control_val,mobility_val,king_safety_val,phase,num_pieces,num_moves,opponent_pieces,evaluation,best_value\n")
+        #         f.write(','.join(map(str, data)) + '\n')
         return best_value, best_board
 
     def detect_cycle(self, cycle_length):
         """
-        Rileva se gli ultimi movimenti contengono un ciclo della lunghezza specificata.
+        Detects if the last moves contain a cycle of the specified length.
 
-        :param last_moves: Deque contenente le ultime mosse.
-        :param cycle_length: Lunghezza del ciclo da verificare.
-        :return: True se viene rilevato un ciclo, False altrimenti.
+        :param last_moves: Deque containing the last moves.
+        :param cycle_length: Length of the cycle to check for.
+        :return: True if a cycle is detected, False otherwise.
         """
-        # Controlla se ci sono abbastanza mosse per verificare un ciclo
+        # Check if there are enough moves to verify a cycle
         if len(self.last_moves) < cycle_length * 2:
             return False
 
-        # Confronta la prima metà con la seconda metà
+        # Compare the first half with the second half
         moves_len = len(self.last_moves)
         offset = moves_len - cycle_length * 2
 
-        # Confronta la prima metà con la seconda metà
+        # Compare the first half with the second half
         return all(
             self.last_moves[i + offset] == self.last_moves[i +
                                                            offset + cycle_length]
@@ -106,7 +148,7 @@ class Player:
         Valuta il vantaggio materiale del giocatore.
         """
         PIECE_VALUES = {"pawn": 1, "knight": 3,
-                        "bishop": 3, "rook": 5, "queen": 9, "king": 0}
+                        "bishop": 3, "rook": 5, "queen": 9, "king": 20}
         pieces = self.chess.get_available_pieces(board)
         score = 0
 
@@ -120,7 +162,7 @@ class Player:
 
         return score
 
-    def simplified_evaluation(self, player_color: Literal["white", "black"], board):
+    def simplified_evaluation(self, player_color: Literal["white", "black"], board, split=False):
         """
         Implementa la Simplified Evaluation Function (SEF) per valutare la scacchiera.
 
@@ -135,7 +177,7 @@ class Player:
         # Materiale (M)
         def material_value():
             piece_values = {"pawn": 1, "knight": 3,
-                            "bishop": 3, "rook": 5, "queen": 9, "king": 0}
+                            "bishop": 3, "rook": 5, "queen": 9, "king": 20}
             pieces = self.chess.get_available_pieces(board)
             score = 0
             for piece in pieces[player_color]:
@@ -230,16 +272,15 @@ class Player:
         mobility_val = mobility() * weights["mobility"]
         king_safety_val = king_safety() * weights["king_safety"]
 
+        if split:
+            return material, pawn_structure, center_control_val, mobility_val, king_safety_val, phase
         # Calcolo del punteggio totale
-        score = material + pawn_structure + center_control_val + mobility_val + king_safety_val
+        score = material + pawn_structure + \
+            center_control_val + mobility_val + king_safety_val
 
         return score
 
     def combined_evaluation(self, player_color: Literal["white", "black"], board):
-        """
-        Combina le valutazioni euristiche in base a pesi bilanciati e normalizza nell'intervallo [0, 10].
-        Il risultato dipende dallo strong_level.
-        """
 
         # Valutazione semplificata
         simplified_value = self.simplified_evaluation(player_color, board)
@@ -247,4 +288,4 @@ class Player:
         # Valutazione materiale
         material_value = self.evaluate_material(player_color, board)
 
-        return material_value if self.strong_level == 0 else simplified_value
+        return material_value if self.heuristic == "MA" else simplified_value
