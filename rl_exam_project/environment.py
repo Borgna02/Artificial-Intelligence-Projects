@@ -42,7 +42,7 @@ class CookingStates(Enum):
 
 
 class Environment:
-    def __init__(self, map_width, map_height, walls, frying_pans: list[tuple], ovens: list[tuple], egg_beaters: list[tuple], gates: list[tuple], recipe: Literal["scrambled", "pudding"]):
+    def __init__(self, map_width, map_height, walls, frying_pans: list[tuple], ovens: list[tuple], egg_beaters: list[tuple], gates: list[tuple], recipe: Literal["scrambled", "pudding"], no_spawn_points=[(5,y) for y in range(1, 5)]):
         self.map_width = map_width
         self.map_height = map_height
 
@@ -51,14 +51,16 @@ class Environment:
         self.ovens = ovens
         self.egg_beaters = egg_beaters
         self.gates = gates
-        
+
         self.recipe = recipe
 
         # Assegno la lista di azioni
         self.actions = [action for action in Actions]
 
-        cells = [(x, y) for y in range(1, map_height+1) for x in range(1, map_width+1)
-                 ]
+        cells = [(x, y) for y in range(1, map_height+1)
+                 for x in range(1, map_width+1)]
+
+        self.no_spawn_points = no_spawn_points
 
         complete_cells = []
         for x, y in cells:
@@ -107,49 +109,98 @@ class Environment:
                         next_x = current_x+1
                         next_y = current_y
 
+                    # Se l'agente vuole cambiare lato e raggiunge il gate, si teletrasporta dall'altro lato
+                    if (next_x, next_y) in self.gates and current_cooking_state in [CookingStates.EB_FOR_PUDDING_OS, CookingStates.EB_FOR_SCRAMBLED_OS, CookingStates.PAN_OS, CookingStates.OVEN_OS]:
+                        next_x, next_y = self.get_other_gate(next_x, next_y)
+
                     next_cell_type = self.get_cell_type(next_x, next_y)
                     next_state = (
                         next_x, next_y, next_cell_type, self.get_next_cooking_state(next_cell_type, current_cooking_state))
                     # Assegno 1 solo allo stato raggiungibile da current_s con l'azione action e solo se non c'è un muro
-                    if ((current_x, current_y), (next_x, next_y)) not in self.walls:
+                    if not self.is_a_wall(current_x, current_y, next_x, next_y) and current_cooking_state != CookingStates.COOKING:
                         self.dynamics[current_s][action][next_state] = 1
                     else:
                         self.dynamics[current_s][action][current_s] = 1
 
-
         # Aggiungi ricompense uguali a 10 se l'agente raggiunge la cella cercata in quel cooking state
-        self.rewards = {state: {action: {next_state: 0 for next_state in self.states}
-                                 for action in self.actions} for state in self.states}
-        
+        self.rewards = {state: {action: {next_state: -1 for next_state in self.states}  # Penalità per passo
+                                for action in self.actions} for state in self.states}
+
         for current_s in self.states:
-            _, _, _, current_cooking_state = current_s
+            current_x, current_y, _, current_cooking_state = current_s
             for action in self.actions:
                 for next_s in self.states:
-                    _, _, next_cell_type, _ = next_s
-                    if current_cooking_state == CookingStates.EB_FOR_PUDDING or current_cooking_state == CookingStates.EB_FOR_SCRAMBLED and next_cell_type == CellType.EGG_BEATER:
-                        self.rewards[current_s][action][next_s] = 10
-                    elif current_cooking_state == CookingStates.PAN and next_cell_type == CellType.FRYING_PAN:
-                        self.rewards[current_s][action][next_s] = 10
-                    elif current_cooking_state == CookingStates.OVEN and next_cell_type == CellType.OVEN:
-                        self.rewards[current_s][action][next_s] = 10
-                    elif current_cooking_state == CookingStates.EB_FOR_SCRAMBLED_OS or current_cooking_state == CookingStates.EB_FOR_PUDDING_OS or current_cooking_state == CookingStates.PAN_OS or current_cooking_state == CookingStates.OVEN_OS and next_cell_type == CellType.GATE:
-                        self.rewards[current_s][action][next_s] = 10
+                    next_x, next_y, next_cell_type, _ = next_s
+
+                    # Premiazione per il raggiungimento dell'egg beater
+                    if current_cooking_state == CookingStates.EB_FOR_PUDDING or current_cooking_state == CookingStates.EB_FOR_SCRAMBLED:
+                        if next_cell_type == CellType.EGG_BEATER:
+                            self.rewards[current_s][action][next_s] = 40
+                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.egg_beaters for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                            
+                            adjacent_egg_beaters = [(x,y) for x, y in self.egg_beaters if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                            goal_x, goal_y = adjacent_egg_beaters[0]
+                           
+                            # Se l'agente raggiunge una cella adiacente all'egg beater, assegna una ricompensa di 20
+                            self.rewards[current_s][action][next_s] = 15 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+
+                    # Premiazione per il raggiungimento della padella
+                    elif current_cooking_state == CookingStates.PAN:
+                        if next_cell_type == CellType.FRYING_PAN:
+                            self.rewards[current_s][action][next_s] = 100
+                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.frying_pans for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                            
+                            adjacent_frying_pans = [(x,y) for x, y in self.frying_pans if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                            goal_x, goal_y = adjacent_frying_pans[0]
+                            
+                            self.rewards[current_s][action][next_s] = 40 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+
+                    # Premiazione per il raggiungimento del forno
+                    elif current_cooking_state == CookingStates.OVEN:
+                        if next_cell_type == CellType.OVEN:
+                            self.rewards[current_s][action][next_s] = 100
+                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.ovens for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                            
+                            adjacent_ovens = [(x,y) for x, y in self.ovens if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                            goal_x, goal_y = adjacent_ovens[0]
+                            
+                            
+                            self.rewards[current_s][action][next_s] = 40 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+
+                    # Premiazione per il passaggio di gate
+                    elif current_cooking_state == CookingStates.EB_FOR_SCRAMBLED_OS or current_cooking_state == CookingStates.EB_FOR_PUDDING_OS or current_cooking_state == CookingStates.PAN_OS or current_cooking_state == CookingStates.OVEN_OS:
+                        if next_cell_type == CellType.GATE:
+                            self.rewards[current_s][action][next_s] = 5
+                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.gates for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                            
+                            adjacent_gates = [(x,y) for x, y in self.gates if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                            goal_x, goal_y = adjacent_gates[0]
+                            
+                            self.rewards[current_s][action][next_s] = 1 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+                    
+                    # Penalità se la transizione attraversa un muro
+                    if self.is_a_wall(current_x, current_y, next_x, next_y):
+                        # Penalità per muro
+                        self.rewards[current_s][action][next_s] = -50
                         
 
-
     def get_episode(self):
-        episode_length = np.random.randint(4, 8)
+        episode_length = np.random.randint(400, 500)
 
-        # Ottieni lo stato iniziale
+        # Ottieni lo stato iniziale random
         if self.recipe == "scrambled":
-            valid_states = [tuple(state) for state in self.states if state[3] == CookingStates.EB_FOR_SCRAMBLED]
+            valid_states = [state for state in self.states if state[3] in [CookingStates.EB_FOR_SCRAMBLED, CookingStates.EB_FOR_SCRAMBLED_OS, CookingStates.PAN] and (state[0], state[1]) not in self.no_spawn_points]
         else:
-            valid_states = [tuple(state) for state in self.states if state[3] == CookingStates.EB_FOR_PUDDING]
+            valid_states = [state for state in self.states if state[3] in [CookingStates.EB_FOR_PUDDING, CookingStates.EB_FOR_PUDDING_OS, CookingStates.OVEN] and (state[0], state[1]) not in self.no_spawn_points]
+
 
         # Scegli uno stato casuale
         if len(valid_states) == 0:
-            raise ValueError(f"No valid states found for recipe '{self.recipe}'")
+            raise ValueError(
+                f"No valid states found for recipe '{self.recipe}'")
+
         current_state = valid_states[np.random.choice(len(valid_states))]
+        print("\nSpawn state: ", current_state)
 
         # Initialize episode
         episode = []
@@ -165,10 +216,12 @@ class Environment:
             if sum(probabilities) == 0:
                 raise ValueError(f"No transitions defined for state {current_state} and action {action}")
 
-            next_state = next_states[np.random.choice(len(next_states), p=probabilities)]
+            next_state = next_states[np.random.choice(
+                len(next_states), p=probabilities)]
 
             # Get reward
             reward = self.rewards[current_state][action][next_state]
+            print("CS: ", current_state, "A: ", action, "NS: ", next_state, "R: ", reward)
 
             # Append to episode
             episode.append((current_state, action, reward))
@@ -176,9 +229,14 @@ class Environment:
             # Update current state
             current_state = next_state
 
+            if current_state[3] == CookingStates.COOKING:
+                print("Cooking state reached\n")
+                break
+
         return episode
         # Funzione per disegnare la griglia e la mappa
-    def draw_map(self):
+
+    def draw_map(self, policy=None):
         fig, ax = plt.subplots(figsize=(self.map_width, self.map_height / 2))
 
         # Disegna la griglia
@@ -222,11 +280,47 @@ class Environment:
                 (x, y), 1, 1, linewidth=1, edgecolor="yellow", facecolor="yellow", label="Gate")
             ax.add_patch(rect)
 
-        # Scrivi le coordinate dentro ogni cella
-        # for x in range(1, self.map_width + 1):
-        #     for y in range(1, self.map_height + 1):
-        #         ax.text(
-        #             x + 0.5, y + 0.5, f'({x},{y})', ha='center', va='center', fontsize=8, color='black')
+        # Disegna la policy
+        if policy is not None:
+            arrow_params = {
+                "width": 0.01,
+                "head_width": 0.1,
+                "head_length": 0.1,
+                "length_includes_head": True
+            }
+            action_directions = {
+                Actions.UP: (0, 0.4),
+                Actions.DOWN: (0, -0.4),
+                Actions.LEFT: (-0.4, 0),
+                Actions.RIGHT: (0.4, 0),
+                Actions.OTHER_SIDE: (0.4, 0.4)
+            }
+            cooking_state_colors = {
+                CookingStates.OVEN: "fuchsia",
+                CookingStates.EB_FOR_PUDDING: "orange",
+                CookingStates.OVEN_OS: "green",
+                CookingStates.EB_FOR_PUDDING_OS: "purple",
+                CookingStates.PAN: "pink",
+                CookingStates.EB_FOR_SCRAMBLED: "yellow",
+                CookingStates.PAN_OS: "blue",
+                CookingStates.EB_FOR_SCRAMBLED_OS: "red",
+                CookingStates.COOKING: "black"
+            }
+
+            for (x, y, _, cooking_state), actions in policy.items():
+                # Default a 'black' se lo stato non è mappato
+                color = cooking_state_colors.get(cooking_state, "black")
+                for action, active in actions.items():
+                    if active == 1:
+                        dx, dy = action_directions[action]
+                        arrow = patches.FancyArrow(
+                            x + 0.5, y + 0.5, dx - 0.04*dx*cooking_state.value, dy - 0.04*dy*cooking_state.value, color=color, **arrow_params
+                        )
+                        ax.add_patch(arrow)
+
+            # Aggiungi la legenda dei colori delle frecce
+            for cooking_state, color in cooking_state_colors.items():
+                ax.plot([], [], color=color, label=cooking_state.name)
 
         # Configurazione del grafico
         ax.set_xlim(1, self.map_width + 1)
@@ -240,6 +334,65 @@ class Environment:
         fig.legend(by_label.values(), by_label.keys(),
                    loc='center left', bbox_to_anchor=(0.72, 0.5))
 
+        plt.show()
+        
+        
+    def draw_map_with_rewards_by_cooking_state(self, cooking_state):
+        fig, ax = plt.subplots(figsize=(self.map_width, self.map_height / 2))
+
+        # Disegna la griglia
+        for x in range(self.map_width + 2):
+            ax.plot([x, x], [1, self.map_height + 1],
+                    color="black", linewidth=0.5)
+        for y in range(self.map_height + 2):
+            ax.plot([0, self.map_width + 1], [y, y],
+                    color="black", linewidth=0.5)
+
+        # Disegna i muri
+        for (x1, y1), (x2, y2) in self.walls:
+            # Muro verticale
+            if y1 == y2:
+                ax.plot([x1+1, x1+1], [y1, y1+1], color="black", linewidth=3)
+            # Muro orizzontale
+            elif x1 == x2:
+                ax.plot([x1, x1+1], [y1+1, y1+1], color="black", linewidth=3)
+
+        # Disegna le padelle
+        for x, y in self.frying_pans:
+            rect = patches.Rectangle(
+                (x, y), 1, 1, linewidth=1, edgecolor="red", facecolor="red", label="Frying Pan")
+            ax.add_patch(rect)
+
+        # Disegna i forni
+        for x, y in self.ovens:
+            rect = patches.Rectangle(
+                (x, y), 1, 1, linewidth=1, edgecolor="green", facecolor="green", label="Oven")
+            ax.add_patch(rect)
+
+        # Disegna le fruste
+        for x, y in self.egg_beaters:
+            rect = patches.Rectangle(
+                (x, y), 1, 1, linewidth=1, edgecolor="blue", facecolor="blue", label="Egg Beater")
+            ax.add_patch(rect)
+
+        # Disegna i cancelli
+        for x, y in self.gates:
+            rect = patches.Rectangle(
+                (x, y), 1, 1, linewidth=1, edgecolor="yellow", facecolor="yellow", label="Gate")
+            ax.add_patch(rect)
+
+        # Disegna le ricompense
+        for x, y, _, current_cooking_state in self.states:
+            if current_cooking_state == cooking_state:
+                reward = max(self.rewards[current_state][action][(x, y, _, current_cooking_state)]for action in self.actions for current_state in self.states if current_state[3] == cooking_state)
+                ax.text(x + 0.5, y + 0.5, f"{reward}", ha="center", va="center")
+        
+        # Configurazione del grafico
+        ax.set_xlim(1, self.map_width + 1)
+        ax.set_ylim(1, self.map_height + 1)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        
         plt.show()
 
     def other_side_counterpart(self, cooking_state):
@@ -259,6 +412,8 @@ class Environment:
             return CookingStates.OVEN_OS
         elif cooking_state == CookingStates.OVEN_OS:
             return CookingStates.OVEN
+        elif cooking_state == CookingStates.COOKING:
+            return CookingStates.COOKING
         else:
             return None
 
@@ -276,7 +431,7 @@ class Environment:
 
     def get_next_cooking_state(self, next_cell_type, current_cooking_state):
         # Se sto cercando qualcosa dall'altro lato e raggiungo il gate, passo alla controparte dell'altro lato
-        if current_cooking_state == CookingStates.EB_FOR_PUDDING_OS or current_cooking_state == CookingStates.EB_FOR_SCRAMBLED_OS or current_cooking_state == CookingStates.PAN_OS or current_cooking_state == CookingStates.OVEN_OS and next_cell_type == CellType.GATE:
+        if next_cell_type == CellType.GATE and (current_cooking_state == CookingStates.EB_FOR_PUDDING_OS or current_cooking_state == CookingStates.EB_FOR_SCRAMBLED_OS or current_cooking_state == CookingStates.PAN_OS or current_cooking_state == CookingStates.OVEN_OS):
             return self.other_side_counterpart(current_cooking_state)
 
         # Se sto cercando l'egg beater per pudding e raggiungo l'egg beater, passo alla ricerca del forno
@@ -297,3 +452,13 @@ class Environment:
 
         else:
             return current_cooking_state
+
+    def get_other_gate(self, x, y):
+        for gate_x, gate_y in self.gates:
+            if gate_x != x and gate_y != y:
+                return gate_x, gate_y
+
+        return None
+
+    def is_a_wall(self, x1, y1, x2, y2):
+        return ((x1, y1), (x2, y2)) in self.walls or ((x2, y2), (x1, y1)) in self.walls
