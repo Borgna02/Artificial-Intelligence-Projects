@@ -17,7 +17,7 @@ class Agent:
 
         self.policy = {}
 
-        self.GAMMA = 0.7
+        self.GAMMA = 0.1
 
     def incremental_mc(self, iterations):
         self.N = {}

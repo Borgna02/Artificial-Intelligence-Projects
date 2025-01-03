@@ -122,7 +122,8 @@ class Environment:
                     else:
                         self.dynamics[current_s][action][current_s] = 1
 
-        # Aggiungi ricompense uguali a 10 se l'agente raggiunge la cella cercata in quel cooking state
+
+        # Rewards
         self.rewards = {state: {action: {next_state: -1 for next_state in self.states}  # Penalità per passo
                                 for action in self.actions} for state in self.states}
 
@@ -136,47 +137,47 @@ class Environment:
                     if current_cooking_state == CookingStates.EB_FOR_PUDDING or current_cooking_state == CookingStates.EB_FOR_SCRAMBLED:
                         if next_cell_type == CellType.EGG_BEATER:
                             self.rewards[current_s][action][next_s] = 40
-                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.egg_beaters for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                        # elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.egg_beaters for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
                             
-                            adjacent_egg_beaters = [(x,y) for x, y in self.egg_beaters if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
-                            goal_x, goal_y = adjacent_egg_beaters[0]
+                        #     adjacent_egg_beaters = [(x,y) for x, y in self.egg_beaters if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                        #     goal_x, goal_y = adjacent_egg_beaters[0]
                            
-                            # Se l'agente raggiunge una cella adiacente all'egg beater, assegna una ricompensa di 20
-                            self.rewards[current_s][action][next_s] = 15 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+                        #     # Se l'agente raggiunge una cella adiacente all'egg beater, assegna una ricompensa di 20
+                        #     self.rewards[current_s][action][next_s] = 15 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
 
                     # Premiazione per il raggiungimento della padella
                     elif current_cooking_state == CookingStates.PAN:
                         if next_cell_type == CellType.FRYING_PAN:
                             self.rewards[current_s][action][next_s] = 100
-                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.frying_pans for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                        # elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.frying_pans for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
                             
-                            adjacent_frying_pans = [(x,y) for x, y in self.frying_pans if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
-                            goal_x, goal_y = adjacent_frying_pans[0]
+                        #     adjacent_frying_pans = [(x,y) for x, y in self.frying_pans if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                        #     goal_x, goal_y = adjacent_frying_pans[0]
                             
-                            self.rewards[current_s][action][next_s] = 40 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+                        #     self.rewards[current_s][action][next_s] = 40 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
 
                     # Premiazione per il raggiungimento del forno
                     elif current_cooking_state == CookingStates.OVEN:
                         if next_cell_type == CellType.OVEN:
                             self.rewards[current_s][action][next_s] = 100
-                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.ovens for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                        # elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.ovens for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
                             
-                            adjacent_ovens = [(x,y) for x, y in self.ovens if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
-                            goal_x, goal_y = adjacent_ovens[0]
+                        #     adjacent_ovens = [(x,y) for x, y in self.ovens if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                        #     goal_x, goal_y = adjacent_ovens[0]
                             
                             
-                            self.rewards[current_s][action][next_s] = 40 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+                        #     self.rewards[current_s][action][next_s] = 40 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
 
                     # Premiazione per il passaggio di gate
-                    elif current_cooking_state == CookingStates.EB_FOR_SCRAMBLED_OS or current_cooking_state == CookingStates.EB_FOR_PUDDING_OS or current_cooking_state == CookingStates.PAN_OS or current_cooking_state == CookingStates.OVEN_OS:
-                        if next_cell_type == CellType.GATE:
-                            self.rewards[current_s][action][next_s] = 5
-                        elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.gates for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
+                    # elif current_cooking_state == CookingStates.EB_FOR_SCRAMBLED_OS or current_cooking_state == CookingStates.EB_FOR_PUDDING_OS or current_cooking_state == CookingStates.PAN_OS or current_cooking_state == CookingStates.OVEN_OS:
+                    #     if next_cell_type == CellType.GATE:
+                    #         self.rewards[current_s][action][next_s] = 5
+                    #     elif (next_x, next_y) in [(x+dx, y+dy) for x, y in self.gates for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]:
                             
-                            adjacent_gates = [(x,y) for x, y in self.gates if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
-                            goal_x, goal_y = adjacent_gates[0]
+                    #         adjacent_gates = [(x,y) for x, y in self.gates if (x, y) in [(next_x + dx, next_y + dy) for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]]]
+                    #         goal_x, goal_y = adjacent_gates[0]
                             
-                            self.rewards[current_s][action][next_s] = 1 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
+                    #         self.rewards[current_s][action][next_s] = 1 if not self.is_a_wall(goal_x, goal_y, next_x, next_y) else -1
                     
                     # Penalità se la transizione attraversa un muro
                     if self.is_a_wall(current_x, current_y, next_x, next_y):
@@ -236,7 +237,7 @@ class Environment:
         return episode
         # Funzione per disegnare la griglia e la mappa
 
-    def draw_map(self, policy=None):
+    def draw_map(self, policy=None, cooking_state_for_rw=None):
         fig, ax = plt.subplots(figsize=(self.map_width, self.map_height / 2))
 
         # Disegna la griglia
@@ -256,23 +257,20 @@ class Environment:
             elif x1 == x2:
                 ax.plot([x1, x1+1], [y1+1, y1+1], color="black", linewidth=3)
 
-        # Disegna le padelle
+        # Disegna le padelle con immagine
+        pan_image = plt.imread('pan.png')
         for x, y in self.frying_pans:
-            rect = patches.Rectangle(
-                (x, y), 1, 1, linewidth=1, edgecolor="red", facecolor="red", label="Frying Pan")
-            ax.add_patch(rect)
+            ax.imshow(pan_image, extent=(x, x+1, y, y+1))
 
-        # Disegna i forni
+        # Disegna i forni con immagine
+        oven_image = plt.imread('oven.png')
         for x, y in self.ovens:
-            rect = patches.Rectangle(
-                (x, y), 1, 1, linewidth=1, edgecolor="green", facecolor="green", label="Oven")
-            ax.add_patch(rect)
+            ax.imshow(oven_image, extent=(x, x+1, y, y+1))
 
         # Disegna le fruste
+        egg_beater_image = plt.imread('beater.png')
         for x, y in self.egg_beaters:
-            rect = patches.Rectangle(
-                (x, y), 1, 1, linewidth=1, edgecolor="blue", facecolor="blue", label="Egg Beater")
-            ax.add_patch(rect)
+            ax.imshow(egg_beater_image, extent=(x, x+1, y, y+1))
 
         # Disegna i cancelli
         for x, y in self.gates:
@@ -300,10 +298,10 @@ class Environment:
                 CookingStates.EB_FOR_PUDDING: "orange",
                 CookingStates.OVEN_OS: "green",
                 CookingStates.EB_FOR_PUDDING_OS: "purple",
-                CookingStates.PAN: "pink",
-                CookingStates.EB_FOR_SCRAMBLED: "yellow",
-                CookingStates.PAN_OS: "blue",
-                CookingStates.EB_FOR_SCRAMBLED_OS: "red",
+                # CookingStates.PAN: "pink",
+                # CookingStates.EB_FOR_SCRAMBLED: "yellow",
+                # CookingStates.PAN_OS: "blue",
+                # CookingStates.EB_FOR_SCRAMBLED_OS: "red",
                 CookingStates.COOKING: "black"
             }
 
@@ -321,6 +319,16 @@ class Environment:
             # Aggiungi la legenda dei colori delle frecce
             for cooking_state, color in cooking_state_colors.items():
                 ax.plot([], [], color=color, label=cooking_state.name)
+                
+        if cooking_state_for_rw is not None:
+            # Disegna le ricompense
+            for x, y, _, current_cooking_state in self.states:
+                if current_cooking_state == cooking_state_for_rw:
+                    reward = max(self.rewards[current_state][action][(x, y, _, current_cooking_state)]for action in self.actions for current_state in self.states if current_state[3] == cooking_state_for_rw)
+                    ax.text(x + 0.9, y + 0.1, f"{reward}", ha="right", va="bottom", fontsize=8)
+                    
+            # Imposta il titolo del plt come il nome dell'enum current_state_for_rw
+            ax.set_title(f"Rewards per Cooking State: {cooking_state_for_rw.name}")
 
         # Configurazione del grafico
         ax.set_xlim(1, self.map_width + 1)
@@ -337,64 +345,6 @@ class Environment:
         plt.show()
         
         
-    def draw_map_with_rewards_by_cooking_state(self, cooking_state):
-        fig, ax = plt.subplots(figsize=(self.map_width, self.map_height / 2))
-
-        # Disegna la griglia
-        for x in range(self.map_width + 2):
-            ax.plot([x, x], [1, self.map_height + 1],
-                    color="black", linewidth=0.5)
-        for y in range(self.map_height + 2):
-            ax.plot([0, self.map_width + 1], [y, y],
-                    color="black", linewidth=0.5)
-
-        # Disegna i muri
-        for (x1, y1), (x2, y2) in self.walls:
-            # Muro verticale
-            if y1 == y2:
-                ax.plot([x1+1, x1+1], [y1, y1+1], color="black", linewidth=3)
-            # Muro orizzontale
-            elif x1 == x2:
-                ax.plot([x1, x1+1], [y1+1, y1+1], color="black", linewidth=3)
-
-        # Disegna le padelle
-        for x, y in self.frying_pans:
-            rect = patches.Rectangle(
-                (x, y), 1, 1, linewidth=1, edgecolor="red", facecolor="red", label="Frying Pan")
-            ax.add_patch(rect)
-
-        # Disegna i forni
-        for x, y in self.ovens:
-            rect = patches.Rectangle(
-                (x, y), 1, 1, linewidth=1, edgecolor="green", facecolor="green", label="Oven")
-            ax.add_patch(rect)
-
-        # Disegna le fruste
-        for x, y in self.egg_beaters:
-            rect = patches.Rectangle(
-                (x, y), 1, 1, linewidth=1, edgecolor="blue", facecolor="blue", label="Egg Beater")
-            ax.add_patch(rect)
-
-        # Disegna i cancelli
-        for x, y in self.gates:
-            rect = patches.Rectangle(
-                (x, y), 1, 1, linewidth=1, edgecolor="yellow", facecolor="yellow", label="Gate")
-            ax.add_patch(rect)
-
-        # Disegna le ricompense
-        for x, y, _, current_cooking_state in self.states:
-            if current_cooking_state == cooking_state:
-                reward = max(self.rewards[current_state][action][(x, y, _, current_cooking_state)]for action in self.actions for current_state in self.states if current_state[3] == cooking_state)
-                ax.text(x + 0.5, y + 0.5, f"{reward}", ha="center", va="center")
-        
-        # Configurazione del grafico
-        ax.set_xlim(1, self.map_width + 1)
-        ax.set_ylim(1, self.map_height + 1)
-        ax.set_aspect('equal')
-        ax.axis('off')
-        
-        plt.show()
-
     def other_side_counterpart(self, cooking_state):
         if cooking_state == CookingStates.EB_FOR_SCRAMBLED:
             return CookingStates.EB_FOR_SCRAMBLED_OS
