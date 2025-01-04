@@ -1,196 +1,164 @@
+from collections import defaultdict
 import random
+import time
 from typing import Literal
-from environment import Environment
+from environment import Environment, Actions, CookingStates
 import numpy as np
+import pandas as pd
 
 
 class Agent:
-    def __init__(self, env: Environment):
+    def __init__(self, env: Environment, recipe: Literal["scrambled", "pudding", "both"], spawn_point=None):
+        self.statistics = dict()
+
         self.env = env
-        self.states = set()
-        self.actions = set()
+        self.states = env.states
+        self.actions = env.actions
 
         self.N = {}
         self.V = {}
-
         self.Q = {}
 
         self.policy = {}
 
-        self.GAMMA = 0.1
+        self.GAMMA = 0.7
 
-    def incremental_mc(self, iterations):
-        self.N = {}
-        self.V = {}
-        for i in range(iterations):
-            episode = self.env.get_episode()
+        self.__recipe = recipe
+        self.__spawn_point = spawn_point
 
-            T = len(episode)  # time steps
-            for t in range(T):
-                state = episode[t][0]
+    def __generate_episode(self, using_policy: bool = False, min_length: int = 1, max_length: int = 100, i=0):
+        current_state = self.env.get_episode_start_state(
+            self.__recipe, self.__spawn_point)
+        print(f"\n\nEpisode {i} started from {current_state}")
+        episode = []
+        for _ in range(random.randint(min_length, max_length)):
 
-                self.N[state] = self.N.get(state, 0) + 1
-                current_V = self.V.get(state, 0)
+            if not using_policy:
+                action = random.choice(self.actions)
+            else:
+                try:
+                    action = random.choices(
+                        list(self.policy[current_state]), weights=self.policy[current_state].values())[0]
+                except KeyError:
+                    action = random.choice(self.actions)
 
-                # episode[2] is the reward
-                G = sum((self.GAMMA ** (t1-t)) *
-                        episode[t1][2] for t1 in range(t, T))
+            next_state, reward = self.env.get_next_state(current_state, action)
 
-                self.V[state] = current_V + 1 / self.N[state] * (G - current_V)
+            episode.append((current_state, action, reward))
 
-            print(i, " | ", ", ".join(
-                f"{key}: {self.V[key]}" for key in sorted(self.V)))
+            # print(f"State: {current_state}, Action: {action}, Reward: {reward}, Next State: {next_state}")
+            current_state = next_state
 
-    def incremental_mc_q(self, iterations):
-        self.N = {}
-        self.Q = {}
-        for i in range(iterations):
-            episode = self.env.get_episode()
-            T = len(episode)
+            if "goal_rate" not in self.statistics:
+                self.statistics["goal_rate"] = {"n": 0, "successes": {}}
+            if self.env.is_goal_state(*current_state):
+                print("Goal")
 
-            for t in range(T):
-                state = episode[t][0]
-                action = episode[t][1]
+                self.statistics["goal_rate"]["n"] = self.statistics["goal_rate"].get(
+                    "n", 0) + 1
+                self.statistics["goal_rate"]["successes"][i] = self.statistics["goal_rate"]["successes"].get(
+                    i-1, 0) + 1
+                break
+            else:
+                self.statistics["goal_rate"]["n"] = self.statistics["goal_rate"].get(
+                    "n", 0) + 1
+                self.statistics["goal_rate"]["successes"][i] = self.statistics["goal_rate"]["successes"].get(
+                    i-1, 0) + 0
 
-                self.states.add(state)
-                self.actions.add(action)
-
-                self.N[(state, action)] = self.N.get((state, action), 0) + 1
-                current_Q = self.Q.get((state, action), 0)
-
-                G = sum((self.GAMMA ** (t1-t)) *
-                        episode[t1][2] for t1 in range(t, T))
-
-                self.Q[(state, action)] = current_Q + 1 / \
-                    self.N[(state, action)] * (G - current_Q)
-
-            print(i, " | ", ", ".join(
-                f"{key}: {self.Q[key]}" for key in self.Q))
-
-    def incremental_mc_q_policy(self):
-        self.N = {}
-        self.Q = {}
-        self.policy = {}
-        old_policy = {}
-
-        i = 0
-        while not self.policy or any(
-            state not in old_policy or
-            abs(old_policy[state].get(action, 0) - self.policy[state].get(action, 0)) > 0
-            for state in self.policy
-            for action in self.policy[state]
-        ):  
-            episode = self.env.get_episode()
-            old_policy = dict(self.policy)
-            T = len(episode)
-
-            for t in range(T):
-                state = episode[t][0]
-                action = episode[t][1]
-
-                self.states.add(state)
-                self.actions.add(action)
-
-                self.N[(state, action)] = self.N.get((state, action), 0) + 1
-                current_Q = self.Q.get((state, action), 0)
-
-                G = sum((self.GAMMA ** (t1-t)) *
-                        episode[t1][2] for t1 in range(t, T))
-
-                self.Q[(state, action)] = current_Q + 1 / \
-                    self.N[(state, action)] * (G - current_Q)
-
-            # Aggiorna la policy basata su Q
-            for s_i, s in enumerate(self.states, 0):
-                # Costruisce Q come dizionario di liste, una lista per ogni stato
-                Q = {state: [] for state in self.states}
-                # Ordina per azione
-                for (state, action), value in sorted(self.Q.items(), key=lambda x: x[0][1].value):
-                    if state in Q:
-                        # Conserva anche l'azione associata
-                        Q[state].append((action, value))
-
-                                    
-                # Inizializza la policy dello stato corrente
-                self.policy[s] = {action: 0 for action in self.actions} #if not self.policy.get(s) else self.policy[s]
-
-                if Q[s]:  # Solo se ci sono valori per lo stato corrente
-                    # Trova l'azione con il valore massimo
-                    # max_value = max(Q[s], key=lambda x: x[1])[1]
-
-                    best_action, _ = max(Q[s], key=lambda x: x[1])  # x[1] è il valore associato all'azione
-                    self.policy[s][best_action] = 1
-
-                    # for action, value in Q[s]:
-                    #     if value == max_value:  # Prima azione con valore massimo
-                    #         action_index = list(self.actions).index(
-                    #             action)  # Ottieni l'indice dell'azione
-                    #         self.policy[s_i][action_index] = 1
-                    #         break  # Imposta solo per la prima azione trovata con valore massimo
-
-            print(i, " | ", ", ".join(
-                f"{key}: {self.policy[key]}" for key in self.policy))
-            i += 1
+        return episode
 
     def incremental_mc_epsilon_greedy(self):
-        self.N = {}
-        self.Q = {}
-        epsilon = 1
-        # if not self.policy:
-        #     self.policy = [[-2] * len(self.actions) for _ in range(len(self.states))]
-        # old_policy = [[-1] * len(self.actions) for _ in range(len(self.states))]
+        self.statistics["policy_changes"] = {"exploration": {}, "exploitation": {}}
 
-        self.policy = {}
+        # Inizializza i contatori N e Q per tutte le azioni in ogni stato
+        self.N = {state: {action: 0 for action in self.actions}
+                  for state in self.states}
+        self.Q = {state: {action: 0 for action in self.actions}
+                  for state in self.states}
+
+        epsilon = 0.1  # Valore iniziale di epsilon per la strategia epsilon-greedy
+
+        # Inizializza la policy con azioni casuali per ogni stato
+        self.policy = {state: {action: 0 for action in self.actions}
+                       for state in self.states}
+        for state in self.states:
+            chosen_action = random.choice(self.actions)
+            self.policy[state][chosen_action] = 1
+
         old_policy = {}
+        i = 1  # Contatore per gli episodi
 
-        i = 0
-        while not self.policy or any(
-            state not in old_policy or
-            abs(old_policy[state].get(action, 0) - self.policy[state].get(action, 0)) > 0
-            for state in self.policy
-            for action in self.policy[state]
-        ):
-            episode = self.env.get_episode()
-            old_policy = dict(self.policy)
+        while (not old_policy or self.statistics["policy_changes"]["exploration"].get(i-1, 0) + self.statistics["policy_changes"]["exploitation"].get(i-1, 0) > 0):
 
-            T = len(episode)
+            # Genera un episodio utilizzando la policy corrente
+            episode = self.__generate_episode(
+                using_policy=True, min_length=300, max_length=500, i=i)
+            old_policy = dict(self.policy)  # Salva la vecchia policy
+
+            states = set()
+            T = len(episode)  # Lunghezza dell'episodio
             for t in range(T):
-                state = episode[t][0]
-                action = episode[t][1]
+                state, action, reward = episode[t]
+                states.add(state)
+                # Aggiorna il conteggio N per la coppia stato-azione
+                self.N[state][action] += 1
 
-                self.states.add(state)
-                self.actions.add(action)
+                # Calcola il ritorno (G) dall'attuale passo fino alla fine dell'episodio
+                G = sum(self.GAMMA ** (k-t) *
+                        episode[k][2] for k in range(t, T))
 
-                self.N[(state, action)] = self.N.get((state, action), 0) + 1
-                G = sum(self.GAMMA ** i * episode[i][2] for i in range(t, T))
+                # Aggiorna Q usando il metodo incrementale Monte Carlo
+                current_Q = self.Q[state][action]
+                self.Q[state][action] = current_Q + \
+                    (1 / self.N[state][action]) * (G - current_Q)
 
-                current_Q = self.Q.get((state, action), 0)
-                self.Q[(state, action)] = current_Q + 1 / \
-                    self.N[(state, action)] * (G - current_Q)
+            # Convert Q to a DataFrame and save to a csv file
+            # q_data = []
+            # for state in self.Q:
+            #     for action in self.Q[state]:
+            #         q_data.append([state, action, self.Q[state][action]])
 
+            # df = pd.DataFrame(q_data, columns=['State', 'Action', 'Q-value'])
+            # df.to_csv('Q_values.csv', index=False)
+            # time.sleep(2)
+
+            # Aggiorna la policy epsilon-greedy per ogni stato incontrato nell'episode
             for s in self.states:
-                # Costruisce Q come dizionario di liste, una lista per ogni stato
-                Q = {state: [] for state in self.states}
+                
+                old_best_action = [action for action, value in self.policy[s].items() if value == 1][0]
+                
+                
+                # # Resetta la policy dello stato corrente
+                # self.policy[s] = {action: 0 for action in self.actions}
 
-                # Ordina per azione
-                for (state, action), value in sorted(self.Q.items(), key=lambda x: x[0][1].value):
-                    if state in Q:
-                        # Conserva anche l'azione associata
-                        Q[state].append((action, value))
+                # Decidi se esplorare o sfruttare
+                if random.random() < epsilon:  # Esplorazione
+                    chosen_action = random.choice(self.actions)
+                    self.policy[s][old_best_action] = 0
+                    self.policy[s][chosen_action] = 1
+                    if old_best_action != chosen_action:
+                        self.statistics["policy_changes"]["exploration"][i] = self.statistics["policy_changes"]["exploration"].get(
+                            i, 0) + 1
+                else:  # Sfruttamento
+                    max_value = max(self.Q[s].values())
+                    best_actions = [
+                        action for action, value in self.Q[s].items() if value == max_value]
+                    chosen_action = random.choice(
+                        best_actions) if s in states else best_actions[0]
+                    self.policy[s][old_best_action] = 0
+                    self.policy[s][chosen_action] = 1
 
-                # Inizializza la policy dello stato corrente
-                self.policy[s] = {action: 0 for action in self.actions} #if not self.policy.get(s) else self.policy[s]
+                    if old_best_action != chosen_action:
+                        self.statistics["policy_changes"]["exploitation"][i] = self.statistics["policy_changes"]["exploitation"].get(
+                            i, 0) + 1
+                        
+            print(f"Policy changes for episode {i} (eps: {epsilon}): exploration: {self.statistics['policy_changes']['exploration'].get(i, 0)}, exploitation: {self.statistics['policy_changes']["exploitation"].get(i, 0)}")
 
-                for action, value in Q[s]:
-                    exploration = random.choices([True, False], weights=[
-                                                 epsilon, 1 - epsilon])[0]
-
-                    if exploration:
-                        choosen_action = random.choices(list(self.actions))[0]
-                        self.policy[s][choosen_action] = 1
-                    else:
-                        # print(Q[s])
-                        best_action, _ = max(Q[s], key=lambda x: x[1])  # x[1] è il valore associato all'azione
-                        self.policy[s][best_action] = 1
+            # Incrementa il contatore degli episodi e aggiorna epsilon
             i += 1
-            epsilon = 1/i
+            # epsilon = 1 / (i ** 0.25)  # Decadimento perfetto
+            epsilon = 1 / (i ** 0.25)  # Decadimento perfetto
+
+        print(f"Epsilon dopo il {i}° episodio: {epsilon}")
+
+
